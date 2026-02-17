@@ -13,6 +13,7 @@ public class Main {
     private static final float DEFAULT_DENSITY_RATE = 25.0f;
     private static final float MIN_EMISSION_SPEED = 1.4f;
     private static final float MAX_EMISSION_SPEED = 3.0f;
+    private static final float EMITTER_ANGLE_OFFSET_RADIANS = (float) (Math.PI / 3.0);
     private static final int DEFAULT_SIMULATION_STEPS = 180;
     private static final int DEFAULT_EMITTER_COUNT = 12;
     private static final int MP4_FRAMES_PER_SECOND = 30;
@@ -298,7 +299,11 @@ public class Main {
             float towardCenterY = centerY - y;
             float towardCenterAngle = (float) Math.atan2(towardCenterY, towardCenterX);
 
-            float candidateAngle = towardCenterAngle + randomRange(random, -(float) (Math.PI / 2.0), (float) (Math.PI / 2.0));
+            float candidateAngle = towardCenterAngle + randomRange(
+                    random,
+                    -EMITTER_ANGLE_OFFSET_RADIANS,
+                    EMITTER_ANGLE_OFFSET_RADIANS
+            );
             float directionX = (float) Math.cos(candidateAngle);
             float directionY = (float) Math.sin(candidateAngle);
             float inwardDot = directionX * towardCenterX + directionY * towardCenterY;
