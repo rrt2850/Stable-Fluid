@@ -8,13 +8,13 @@
  * @param gridY         Y-coordinate of the emitter in grid space.
  * @param radius        The radius of the emitter
  * @param densityRate   Amount of density injected per time step.
- * @param angleRadians  Direction of emitted fluid in radians.
+ * @param angleDegrees  Direction of emitted fluid in degrees.
  * @param emissionSpeed Speed at which fluid is emitted.
  * @param red           Red component of injected density in the [0, 1] range.
  * @param green         Green component of injected density in the [0, 1] range.
  * @param blue          Blue component of injected density in the [0, 1] range.
  */
-public record FluidEmitter(int gridX, int gridY, int radius, float densityRate, float angleRadians, float emissionSpeed,
+public record FluidEmitter(int gridX, int gridY, int radius, float densityRate, float angleDegrees, float emissionSpeed,
                            float red, float green, float blue) {
 
     private static final int MIN_RADIUS = 1;
@@ -37,6 +37,7 @@ public record FluidEmitter(int gridX, int gridY, int radius, float densityRate, 
 
         // Base emission direction vector
         float velocityRadiusScale = 1.0f / (float) Math.pow(effectiveRadius, VELOCITY_RADIUS_FALLOFF_EXPONENT);
+        double angleRadians = Math.toRadians(angleDegrees);
         float velocityPerWeightX = (float) Math.cos(angleRadians) * emissionSpeed * velocityRadiusScale;
         float velocityPerWeightY = (float) Math.sin(angleRadians) * emissionSpeed * velocityRadiusScale;
 

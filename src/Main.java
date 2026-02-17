@@ -21,7 +21,6 @@ public class Main {
     private static final int EMITTER_RADIUS = 20; // Explodes around 35
     private static final float VORTICITY_CONFINEMENT = 2.1f;
 
-    private static final float EMITTER_ANGLE_OFFSET_RADIANS = (float) (Math.PI / 3.0);
     private static final int DEFAULT_SIMULATION_STEPS = 100;
     private static final int DEFAULT_EMITTER_COUNT = 12;
     private static final int MP4_FRAMES_PER_SECOND = 30;
@@ -67,11 +66,11 @@ public class Main {
             int green = Math.round(clamp(emitter.green(), 0.0f, 1.0f) * 255.0f);
             int blue = Math.round(clamp(emitter.blue(), 0.0f, 1.0f) * 255.0f);
             System.out.printf(
-                    "  #%d at (%d,%d) angle=%.2f rad speed=%.2f color=(%d,%d,%d)%n",
+                    "  #%d at (%d,%d) angle=%.2f deg speed=%.2f color=(%d,%d,%d)%n",
                     i + 1,
                     emitter.gridX(),
                     emitter.gridY(),
-                    emitter.angleRadians(),
+                    emitter.angleDegrees(),
                     emitter.emissionSpeed(),
                     red,
                     green,
@@ -319,7 +318,7 @@ public class Main {
             float towardCenterX = centerX - x;
             float towardCenterY = centerY - y;
 
-            float candidateAngle = (float) Math.atan2(towardCenterY, towardCenterX);
+            float candidateAngle = (float) Math.toDegrees(Math.atan2(towardCenterY, towardCenterX));
 
 
             float[] emitterColor = NAMESPACE_COLORS[emitters.size() % NAMESPACE_COLORS.length];
