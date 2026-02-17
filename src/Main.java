@@ -1,3 +1,7 @@
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -8,13 +12,13 @@ public class Main {
     private static final float MAX_EMISSION_SPEED = 1.2f;
 
     public static void main(String[] args) {
-        int emitterCount = parseEmitterCount(args);
+        SimulationConfig config = parseConfig(args);
 
-        FluidGrid grid = new FluidGrid(128, 128, 1.0f / 128.0f);
+        FluidGrid grid = new FluidGrid(config.gridWidth, config.gridHeight, 1.0f / Math.max(config.gridWidth, config.gridHeight));
         SimulationParameters parameters = new SimulationParameters(0.016f, 0.0001f, 0.0001f, 20);
 
         List<FluidSource> sources = List.of(new FluidSource(grid.width / 2, grid.height / 2, 40.0f));
-        List<FluidEmitter> emitters = generateEdgeEmitters(grid, emitterCount, new Random());
+        List<FluidEmitter> emitters = generateEdgeEmitters(grid, config.emitterCount, new Random());
 
         FluidSolver solver = new FluidSolver(grid, parameters, sources, emitters);
 
@@ -38,21 +42,63 @@ public class Main {
 
         int center = grid.index((grid.width + 1) / 2, (grid.height + 1) / 2);
         System.out.println("Simulation ran. Center density=" + solver.densityField.readValues[center]);
+
+        String outputPath = "density.png";
+        saveDensityToPng(grid, solver.densityField, outputPath);
+        System.out.println("Saved density image to " + outputPath);
     }
 
-    private static int parseEmitterCount(String[] args) {
-        if (args.length == 0) {
-            return 8;
+    private static SimulationConfig parseConfig(String[] args) {
+        int gridWidth = parsePositiveInt(args, 0, 128, "grid width");
+        int gridHeight = parsePositiveInt(args, 1, 128, "grid height");
+        int emitterCount = parsePositiveInt(args, 2, 8, "emitter count");
+
+        return new SimulationConfig(gridWidth, gridHeight, emitterCount);
+    }
+
+    private static int parsePositiveInt(String[] args, int index, int defaultValue, String argumentName) {
+        if (args.length <= index) {
+            return defaultValue;
         }
 
         try {
-            int parsed = Integer.parseInt(args[0]);
+            int parsed = Integer.parseInt(args[index]);
             if (parsed <= 0) {
-                throw new IllegalArgumentException("Emitter count must be greater than zero.");
+                throw new IllegalArgumentException(argumentName + " must be greater than zero.");
             }
             return parsed;
         } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException("First argument must be an integer emitter count.", exception);
+            throw new IllegalArgumentException(argumentName + " must be an integer.", exception);
+        }
+    }
+
+    private static void saveDensityToPng(FluidGrid grid, ScalarField densityField, String outputPath) {
+        BufferedImage image = new BufferedImage(grid.width, grid.height, BufferedImage.TYPE_INT_ARGB);
+
+        float maxDensity = 0.0f;
+        for (int y = 1; y <= grid.height; y++) {
+            for (int x = 1; x <= grid.width; x++) {
+                int index = grid.index(x, y);
+                maxDensity = Math.max(maxDensity, densityField.readValues[index]);
+            }
+        }
+
+        float normalization = maxDensity > 0.0f ? maxDensity : 1.0f;
+
+        for (int y = 1; y <= grid.height; y++) {
+            for (int x = 1; x <= grid.width; x++) {
+                int index = grid.index(x, y);
+                float normalized = clamp(densityField.readValues[index] / normalization, 0.0f, 1.0f);
+                int grayscale = Math.round(normalized * 255.0f);
+                int argb = (255 << 24) | (grayscale << 16) | (grayscale << 8) | grayscale;
+                image.setRGB(x - 1, y - 1, argb);
+            }
+        }
+
+        try {
+            ImageIO.write(image, "png", new File(outputPath));
+        } catch (IOException exception) {
+            throw new RuntimeException("Failed to write density PNG to " + outputPath, exception);
         }
     }
 
@@ -103,4 +149,10 @@ public class Main {
     private static float randomRange(Random random, float min, float max) {
         return min + random.nextFloat() * (max - min);
     }
+
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private record SimulationConfig(int gridWidth, int gridHeight, int emitterCount) {}
 }
