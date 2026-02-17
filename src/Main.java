@@ -10,10 +10,10 @@ import java.util.List;
 import java.util.Random;
 
 public class Main {
-    private static final float DEFAULT_DENSITY_RATE = 40.0f;
-    private static final float MIN_EMISSION_SPEED = 10.0f;
-    private static final float MAX_EMISSION_SPEED = 15.0f;
-    private static final float TIMESTEP = 0.040f;
+    private static final float DEFAULT_DENSITY_RATE = 30.0f;
+    private static final float MIN_EMISSION_SPEED = 3.0f;
+    private static final float MAX_EMISSION_SPEED = 6.0f;
+    private static final float TIMESTEP = 0.500f;
     private static final float VISCOSITY = 0.00005f;
     private static final float DIFFUSION_RATE = 0.0001f;
     private static final int SOLVER_ITERATIONS = 40;
@@ -308,19 +308,10 @@ public class Main {
             }
 
             float towardCenterX = centerX - x;
-            float towardCenterY = centerY - y;
-            float towardCenterAngle = (float) Math.atan2(towardCenterY, towardCenterX);
+            float towardCenterY = y - centerY; // <-- flipped
 
-            float maxDeviation = (float) Math.toRadians(30.0);
-            float candidateAngle = towardCenterAngle
-                    + randomRange(random, -maxDeviation, maxDeviation);
-            float directionX = (float) Math.cos(candidateAngle);
-            float directionY = (float) Math.sin(candidateAngle);
-            float inwardDot = directionX * towardCenterX + directionY * towardCenterY;
+            float candidateAngle = (float) Math.atan2(towardCenterY, towardCenterX);
 
-            if (inwardDot <= 0.0f) {
-                continue;
-            }
 
             float[] emitterColor = NAMESPACE_COLORS[emitters.size() % NAMESPACE_COLORS.length];
             float emissionSpeed = randomRange(random, MIN_EMISSION_SPEED, MAX_EMISSION_SPEED);
