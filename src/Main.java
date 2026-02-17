@@ -17,6 +17,7 @@ public class Main {
 
         for (int step = 1; step <= 5; step++) {
             solver.step();
+            System.out.println("Step " + step + " divergence RMS=" + solver.computeVelocityDivergenceRms());
         }
 
         int center = grid.index(64, 64);
