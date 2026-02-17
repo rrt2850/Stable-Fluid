@@ -15,6 +15,9 @@ public class LinearSolver {
      * @param iterationCount number of Gauss–Seidel iterations
      */
     public LinearSolver(int iterationCount) {
+        if (iterationCount <= 0) {
+            throw new IllegalArgumentException("iterationCount must be > 0");
+        }
         this.iterationCount = iterationCount;
     }
 
