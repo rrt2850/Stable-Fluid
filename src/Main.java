@@ -63,11 +63,16 @@ public class Main {
             );
         }
 
-        List<BufferedImage> frames = new ArrayList<>();
+        List<BufferedImage> frames = config.exportVideo ? new ArrayList<>() : List.of();
         for (int step = 1; step <= config.simulationSteps; step++) {
             solver.step();
-            frames.add(createDensityImage(grid, solver));
-            System.out.println("Step " + step + " divergence RMS=" + solver.computeVelocityDivergenceRms());
+            if (config.exportVideo) {
+                frames.add(createDensityImage(grid, solver));
+            }
+
+            if (config.logEveryStep) {
+                System.out.println("Step " + step + " divergence RMS=" + solver.computeVelocityDivergenceRms());
+            }
         }
 
         int center = grid.index((grid.width + 1) / 2, (grid.height + 1) / 2);
@@ -80,12 +85,16 @@ public class Main {
         saveDensityToPng(grid, solver, outputPath);
         System.out.println("Saved density image to " + outputPath);
 
-        String videoOutputPath = "density-diffusion.mp4";
-        boolean mp4Exported = saveDensityToMp4(frames, videoOutputPath);
-        if (mp4Exported) {
-            System.out.println("Saved density animation to " + videoOutputPath);
+        if (config.exportVideo) {
+            String videoOutputPath = "density-diffusion.mp4";
+            boolean mp4Exported = saveDensityToMp4(frames, videoOutputPath);
+            if (mp4Exported) {
+                System.out.println("Saved density animation to " + videoOutputPath);
+            } else {
+                System.out.println("Skipped MP4 export because ffmpeg is not available on PATH.");
+            }
         } else {
-            System.out.println("Skipped MP4 export because ffmpeg is not available on PATH.");
+            System.out.println("Skipped MP4 export. Pass a 5th argument of 'true' to enable video output.");
         }
     }
 
@@ -94,8 +103,10 @@ public class Main {
         int gridHeight = parsePositiveInt(args, 1, 128, "grid height");
         int emitterCount = parsePositiveInt(args, 2, DEFAULT_EMITTER_COUNT, "emitter count");
         int simulationSteps = parsePositiveInt(args, 3, DEFAULT_SIMULATION_STEPS, "simulation steps");
+        boolean exportVideo = parseBoolean(args, 4, false, "export video");
+        boolean logEveryStep = parseBoolean(args, 5, false, "log every step");
 
-        return new SimulationConfig(gridWidth, gridHeight, emitterCount, simulationSteps);
+        return new SimulationConfig(gridWidth, gridHeight, emitterCount, simulationSteps, exportVideo, logEveryStep);
     }
 
     private static int parsePositiveInt(String[] args, int index, int defaultValue, String argumentName) {
@@ -112,6 +123,23 @@ public class Main {
         } catch (NumberFormatException exception) {
             throw new IllegalArgumentException(argumentName + " must be an integer.", exception);
         }
+    }
+
+    private static boolean parseBoolean(String[] args, int index, boolean defaultValue, String argumentName) {
+        if (args.length <= index) {
+            return defaultValue;
+        }
+
+        String parsed = args[index].trim().toLowerCase();
+        if ("true".equals(parsed)) {
+            return true;
+        }
+
+        if ("false".equals(parsed)) {
+            return false;
+        }
+
+        throw new IllegalArgumentException(argumentName + " must be either 'true' or 'false'.");
     }
 
     private static void saveDensityToPng(FluidGrid grid, FluidSolver solver, String outputPath) {
@@ -287,5 +315,12 @@ public class Main {
         return Math.max(min, Math.min(max, value));
     }
 
-    private record SimulationConfig(int gridWidth, int gridHeight, int emitterCount, int simulationSteps) {}
+    private record SimulationConfig(
+            int gridWidth,
+            int gridHeight,
+            int emitterCount,
+            int simulationSteps,
+            boolean exportVideo,
+            boolean logEveryStep
+    ) {}
 }
