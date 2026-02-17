@@ -62,7 +62,7 @@ public class FluidSolver {
         }
         for (FluidEmitter emitter : this.emitters) {
             Objects.requireNonNull(emitter, "emitter must not be null");
-            validateInBounds(emitter.gridX, emitter.gridY, "emitter");
+            validateInBounds(emitter.gridX(), emitter.gridY(), "emitter");
         }
     }
 
@@ -99,15 +99,15 @@ public class FluidSolver {
         }
 
         for (FluidEmitter emitter : emitters) {
-            if (!grid.inBounds(emitter.gridX, emitter.gridY)) {
+            if (!grid.inBounds(emitter.gridX(), emitter.gridY())) {
                 continue;
             }
 
-            int index = grid.index(emitter.gridX, emitter.gridY);
+            int index = grid.index(emitter.gridX(), emitter.gridY());
 
-            redDensityField.readValues[index] += dt * emitter.densityRate * emitter.red;
-            greenDensityField.readValues[index] += dt * emitter.densityRate * emitter.green;
-            blueDensityField.readValues[index] += dt * emitter.densityRate * emitter.blue;
+            redDensityField.readValues[index] += dt * emitter.densityRate() * emitter.red();
+            greenDensityField.readValues[index] += dt * emitter.densityRate() * emitter.green();
+            blueDensityField.readValues[index] += dt * emitter.densityRate() * emitter.blue();
 
             emitter.applyVelocity(velocityField, grid);
         }
@@ -352,7 +352,7 @@ public class FluidSolver {
 
     public void addEmitter(FluidEmitter emitter) {
         Objects.requireNonNull(emitter, "emitter must not be null");
-        validateInBounds(emitter.gridX, emitter.gridY, "emitter");
+        validateInBounds(emitter.gridX(), emitter.gridY(), "emitter");
         emitters.add(emitter);
     }
 

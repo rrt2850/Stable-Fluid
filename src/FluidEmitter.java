@@ -1,68 +1,21 @@
 /**
  * Represents a fluid emitter that injects mass and momentum
  * into the simulation at a fixed position.
- *
+ * <p>
  * Conceptually: "fluid shoots out at this angle and speed".
+ *
+ * @param gridX         X-coordinate of the emitter in grid space.
+ * @param gridY         Y-coordinate of the emitter in grid space.
+ * @param radius        The radius of the emitter
+ * @param densityRate   Amount of density injected per time step.
+ * @param angleRadians  Direction of emitted fluid in radians.
+ * @param emissionSpeed Speed at which fluid is emitted.
+ * @param red           Red component of injected density in the [0, 1] range.
+ * @param green         Green component of injected density in the [0, 1] range.
+ * @param blue          Blue component of injected density in the [0, 1] range.
  */
-public class FluidEmitter {
-
-    /**
-     * X-coordinate of the emitter in grid space.
-     */
-    public final int gridX;
-
-    /**
-     * Y-coordinate of the emitter in grid space.
-     */
-    public final int gridY;
-
-    /**
-     * Amount of density injected per time step.
-     */
-    public final float densityRate;
-
-    /**
-     * Direction of emitted fluid in radians.
-     */
-    public final float angleRadians;
-
-    /**
-     * Speed at which fluid is emitted.
-     */
-    public final float emissionSpeed;
-
-    /**
-     * Red component of injected density in the [0, 1] range.
-     */
-    public final float red;
-
-    /**
-     * Green component of injected density in the [0, 1] range.
-     */
-    public final float green;
-
-    /**
-     * Blue component of injected density in the [0, 1] range.
-     */
-    public final float blue;
-
-    public FluidEmitter(int gridX,
-                        int gridY,
-                        float densityRate,
-                        float angleRadians,
-                        float emissionSpeed,
-                        float red,
-                        float green,
-                        float blue) {
-        this.gridX = gridX;
-        this.gridY = gridY;
-        this.densityRate = densityRate;
-        this.angleRadians = angleRadians;
-        this.emissionSpeed = emissionSpeed;
-        this.red = red;
-        this.green = green;
-        this.blue = blue;
-    }
+public record FluidEmitter(int gridX, int gridY, int radius, float densityRate, float angleRadians, float emissionSpeed,
+                           float red, float green, float blue) {
 
     /**
      * Injects momentum into the fluid by adding velocity
@@ -80,7 +33,6 @@ public class FluidEmitter {
         }
 
         // Radius of injection region (tweak 2–5 depending on grid resolution)
-        int radius = 3;
         float radiusSquared = radius * radius;
 
         // Base emission direction vector

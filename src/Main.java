@@ -12,18 +12,20 @@ import java.util.Random;
 
 public class Main {
     private static final float DEFAULT_DENSITY_RATE = 30.0f;
-    private static final float MIN_EMISSION_SPEED = 0.35f;
-    private static final float MAX_EMISSION_SPEED = 0.9f;
-    private static final float TIMESTEP = 0.016f;
+    private static final float MIN_EMISSION_SPEED = 0.5f;
+    private static final float MAX_EMISSION_SPEED = 1.0f;
+    private static final float TIMESTEP = 0.020f;
     private static final float VISCOSITY = 0.00005f;
-    private static final float DIFFUSION_RATE = 0.0001f;
-    private static final int SOLVER_ITERATIONS = 40;
+    private static final float DIFFUSION_RATE = 0.00005f;
+    private static final int SOLVER_ITERATIONS = 25;
+    private static final int EMITTER_RADIUS = 5;
 
     private static final float EMITTER_ANGLE_OFFSET_RADIANS = (float) (Math.PI / 3.0);
     private static final int DEFAULT_SIMULATION_STEPS = 100;
     private static final int DEFAULT_EMITTER_COUNT = 12;
     private static final int MP4_FRAMES_PER_SECOND = 30;
-    private static final int INTERMITTENT_SNAPSHOT_INTERVAL = 50;
+    private static final int INTERMITTENT_SNAPSHOT_INTERVAL = 25;
+    private static final int RANDOM_SEED = 67; // TODO: switch to time-based seed after testing
 
 
     // 12 namespace colors represented as RGB triplets in the [0, 1] range.
@@ -50,23 +52,26 @@ public class Main {
         SimulationParameters parameters = new SimulationParameters(TIMESTEP, VISCOSITY, DIFFUSION_RATE, SOLVER_ITERATIONS);
 
         List<FluidSource> sources = List.of();
-        List<FluidEmitter> emitters = generateEdgeEmitters(grid, config.emitterCount, new Random());
+
+        Random random = new Random(RANDOM_SEED);
+        List<FluidEmitter> emitters = generateEdgeEmitters(grid, config.emitterCount, random);
+
 
         FluidSolver solver = new FluidSolver(grid, parameters, sources, emitters);
 
         System.out.println("Generated " + emitters.size() + " edge emitters:");
         for (int i = 0; i < emitters.size(); i++) {
             FluidEmitter emitter = emitters.get(i);
-            int red = Math.round(clamp(emitter.red, 0.0f, 1.0f) * 255.0f);
-            int green = Math.round(clamp(emitter.green, 0.0f, 1.0f) * 255.0f);
-            int blue = Math.round(clamp(emitter.blue, 0.0f, 1.0f) * 255.0f);
+            int red = Math.round(clamp(emitter.red(), 0.0f, 1.0f) * 255.0f);
+            int green = Math.round(clamp(emitter.green(), 0.0f, 1.0f) * 255.0f);
+            int blue = Math.round(clamp(emitter.blue(), 0.0f, 1.0f) * 255.0f);
             System.out.printf(
                     "  #%d at (%d,%d) angle=%.2f rad speed=%.2f color=(%d,%d,%d)%n",
                     i + 1,
-                    emitter.gridX,
-                    emitter.gridY,
-                    emitter.angleRadians,
-                    emitter.emissionSpeed,
+                    emitter.gridX(),
+                    emitter.gridY(),
+                    emitter.angleRadians(),
+                    emitter.emissionSpeed(),
                     red,
                     green,
                     blue
@@ -94,7 +99,7 @@ public class Main {
                 }
 
                 if (takeIntermittentSnapshots && step % INTERMITTENT_SNAPSHOT_INTERVAL == 0) {
-                    String intermittentPath = String.format("density-step-%05d.png", step);
+                    String intermittentPath = String.format("./results/density-step-%05d.png", step);
                     saveImage(stepImage, intermittentPath);
                     System.out.println("Saved intermittent density image to " + intermittentPath);
                 }
@@ -115,7 +120,7 @@ public class Main {
             System.out.println("Saved density image to " + outputPath);
 
             if (config.exportVideo) {
-                String videoOutputPath = "density-diffusion.mp4";
+                String videoOutputPath = "./results/density-diffusion.mp4";
                 boolean mp4Exported = saveDensityToMp4(tempFramesDirectory, videoOutputPath);
                 if (mp4Exported) {
                     System.out.println("Saved density animation to " + videoOutputPath);
@@ -294,7 +299,7 @@ public class Main {
             int x;
             int y;
 
-            int offset = 3; // same as radius
+            int offset = EMITTER_RADIUS;
 
             if (side == 0) { // top
                 x = 1 + random.nextInt(grid.width);
@@ -321,6 +326,7 @@ public class Main {
             emitters.add(new FluidEmitter(
                     x,
                     y,
+                    EMITTER_RADIUS,
                     DEFAULT_DENSITY_RATE,
                     candidateAngle,
                     emissionSpeed,
