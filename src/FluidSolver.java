@@ -351,4 +351,33 @@ public class FluidSolver {
             throw new IllegalArgumentException(objectType + " out of bounds: (" + gridX + ", " + gridY + ")");
         }
     }
+
+    /**
+     * Computes the root-mean-square (RMS) velocity divergence across active cells.
+     *
+     * <p>For an incompressible flow this value should remain close to zero after
+     * projection. It is useful as a quick correctness signal for a Stable Fluids step.</p>
+     */
+    public float computeVelocityDivergenceRms() {
+        float invTwoCellSize = 0.5f / grid.cellSize;
+        float sumSquares = 0.0f;
+        int activeCells = grid.width * grid.height;
+
+        for (int y = 1; y <= grid.height; y++) {
+            for (int x = 1; x <= grid.width; x++) {
+                int left = grid.index(x - 1, y);
+                int right = grid.index(x + 1, y);
+                int down = grid.index(x, y - 1);
+                int up = grid.index(x, y + 1);
+
+                float duDx = (velocityField.readVelocityX[right] - velocityField.readVelocityX[left]) * invTwoCellSize;
+                float dvDy = (velocityField.readVelocityY[up] - velocityField.readVelocityY[down]) * invTwoCellSize;
+
+                float divergence = duDx + dvDy;
+                sumSquares += divergence * divergence;
+            }
+        }
+
+        return (float) Math.sqrt(sumSquares / activeCells);
+    }
 }
