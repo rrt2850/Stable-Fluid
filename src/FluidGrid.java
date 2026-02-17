@@ -20,6 +20,12 @@ public class FluidGrid {
      * @param cellSize  physical size of each grid cell
      */
     public FluidGrid(int width, int height, float cellSize) {
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("width and height must be > 0");
+        }
+        if (cellSize <= 0f) {
+            throw new IllegalArgumentException("cellSize must be > 0");
+        }
         this.width = width;
         this.height = height;
         this.cellSize = cellSize;

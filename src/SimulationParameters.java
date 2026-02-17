@@ -7,24 +7,24 @@ public class SimulationParameters {
      * Time step used for integration
      * Smaller values improve stability at the cost of performance
      */
-    public float timeStep;
+    private float timeStep;
 
     /**
      * Viscosity of the fluid, how goopy the fluid is
      * Controls velocity diffusion.
      */
-    public float viscosity;
+    private float viscosity;
 
     /**
      * Diffusion rate for scalar quantities like density
      */
-    public float diffusionRate;
+    private float diffusionRate;
 
     /**
      * Number of Gauss–Seidel iterations used in linear solvers
      * Higher values improve accuracy but increase cost
      */
-    public int linearSolverIterations;
+    private int linearSolverIterations;
 
     /**
      * Constructs a parameter set with explicit values, more detail in
@@ -34,10 +34,10 @@ public class SimulationParameters {
                                 float viscosity,
                                 float diffusionRate,
                                 int linearSolverIterations) {
-        this.timeStep = timeStep;
-        this.viscosity = viscosity;
-        this.diffusionRate = diffusionRate;
-        this.linearSolverIterations = linearSolverIterations;
+        setTimeStep(timeStep);
+        setViscosity(viscosity);
+        setDiffusionRate(diffusionRate);
+        setLinearSolverIterations(linearSolverIterations);
     }
 
     /**
@@ -45,5 +45,49 @@ public class SimulationParameters {
      */
     public SimulationParameters() {
         this(0.016f, 0.0001f, 0.0001f, 20);
+    }
+
+    public float getTimeStep() {
+        return timeStep;
+    }
+
+    public void setTimeStep(float timeStep) {
+        if (timeStep <= 0f) {
+            throw new IllegalArgumentException("timeStep must be > 0");
+        }
+        this.timeStep = timeStep;
+    }
+
+    public float getViscosity() {
+        return viscosity;
+    }
+
+    public void setViscosity(float viscosity) {
+        if (viscosity < 0f) {
+            throw new IllegalArgumentException("viscosity must be >= 0");
+        }
+        this.viscosity = viscosity;
+    }
+
+    public float getDiffusionRate() {
+        return diffusionRate;
+    }
+
+    public void setDiffusionRate(float diffusionRate) {
+        if (diffusionRate < 0f) {
+            throw new IllegalArgumentException("diffusionRate must be >= 0");
+        }
+        this.diffusionRate = diffusionRate;
+    }
+
+    public int getLinearSolverIterations() {
+        return linearSolverIterations;
+    }
+
+    public void setLinearSolverIterations(int linearSolverIterations) {
+        if (linearSolverIterations <= 0) {
+            throw new IllegalArgumentException("linearSolverIterations must be > 0");
+        }
+        this.linearSolverIterations = linearSolverIterations;
     }
 }
