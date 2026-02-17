@@ -1,8 +1,10 @@
 param(
+    [int]$GridWidth = 128,
+    [int]$GridHeight = 128,
     [int]$EmitterCount = 8
 )
 
 $ErrorActionPreference = 'Stop'
 
 javac src/*.java
-java -cp src Main $EmitterCount
+java -cp src Main $GridWidth $GridHeight $EmitterCount
