@@ -13,12 +13,12 @@ import java.util.Random;
 public class Main {
     private static final float DEFAULT_DENSITY_RATE = 30.0f;
     private static final float MIN_EMISSION_SPEED = 0.5f;
-    private static final float MAX_EMISSION_SPEED = 1.0f;
+    private static final float MAX_EMISSION_SPEED = 3.0f;
     private static final float TIMESTEP = 0.020f;
     private static final float VISCOSITY = 0.00005f;
-    private static final float DIFFUSION_RATE = 0.00005f;
-    private static final int SOLVER_ITERATIONS = 25;
-    private static final int EMITTER_RADIUS = 5;
+    private static final float DIFFUSION_RATE = 0.000005f;
+    private static final int SOLVER_ITERATIONS = 40;
+    private static final int EMITTER_RADIUS = 10;
 
     private static final float EMITTER_ANGLE_OFFSET_RADIANS = (float) (Math.PI / 3.0);
     private static final int DEFAULT_SIMULATION_STEPS = 100;
