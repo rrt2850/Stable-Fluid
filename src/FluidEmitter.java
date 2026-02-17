@@ -68,16 +68,50 @@ public class FluidEmitter {
      * Injects momentum into the fluid by adding velocity
      * in the emission direction.
      */
+    /**
+     * Injects momentum into the fluid over a small circular region
+     * with radial falloff so the emission behaves like a jet instead
+     * of a single-cell impulse.
+     */
     public void applyVelocity(VectorField velocity, FluidGrid grid) {
         if (!grid.inBounds(gridX, gridY)) {
-            throw new IllegalArgumentException("emitter out of bounds: (" + gridX + ", " + gridY + ")");
+            throw new IllegalArgumentException(
+                    "emitter out of bounds: (" + gridX + ", " + gridY + ")");
         }
-        int index = grid.index(gridX, gridY);
 
-        float velocityX = (float) Math.cos(angleRadians) * emissionSpeed;
-        float velocityY = (float) Math.sin(angleRadians) * emissionSpeed;
+        // Radius of injection region (tweak 2–5 depending on grid resolution)
+        int radius = 3;
+        float radiusSquared = radius * radius;
 
-        velocity.readVelocityX[index] += velocityX;
-        velocity.readVelocityY[index] += velocityY;
+        // Base emission direction vector
+        float baseVX = (float) Math.cos(angleRadians) * emissionSpeed;
+        float baseVY = (float) Math.sin(angleRadians) * emissionSpeed;
+
+        for (int dy = -radius; dy <= radius; dy++) {
+            for (int dx = -radius; dx <= radius; dx++) {
+
+                int x = gridX + dx;
+                int y = gridY + dy;
+
+                if (!grid.inBounds(x, y)) {
+                    continue;
+                }
+
+                float distSquared = dx * dx + dy * dy;
+
+                if (distSquared > radiusSquared) {
+                    continue; // outside circular region
+                }
+
+                // Linear falloff (1 at center → 0 at edge)
+                float distance = (float) Math.sqrt(distSquared);
+                float weight = 1.0f - (distance / radius);
+
+                int index = grid.index(x, y);
+
+                velocity.readVelocityX[index] += baseVX * weight;
+                velocity.readVelocityY[index] += baseVY * weight;
+            }
+        }
     }
 }

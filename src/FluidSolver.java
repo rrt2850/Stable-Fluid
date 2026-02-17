@@ -108,11 +108,7 @@ public class FluidSolver {
             greenDensityField.readValues[index] += dt * emitter.densityRate * emitter.green;
             blueDensityField.readValues[index] += dt * emitter.densityRate * emitter.blue;
 
-            float vx = (float) Math.cos(emitter.angleRadians) * emitter.emissionSpeed;
-            float vy = (float) Math.sin(emitter.angleRadians) * emitter.emissionSpeed;
-
-            velocityField.readVelocityX[index] += dt * vx;
-            velocityField.readVelocityY[index] += dt * vy;
+            emitter.applyVelocity(velocityField, grid);
         }
     }
 

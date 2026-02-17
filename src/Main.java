@@ -10,12 +10,18 @@ import java.util.List;
 import java.util.Random;
 
 public class Main {
-    private static final float DEFAULT_DENSITY_RATE = 25.0f;
-    private static final float MIN_EMISSION_SPEED = 1.4f;
-    private static final float MAX_EMISSION_SPEED = 3.0f;
-    private static final int DEFAULT_SIMULATION_STEPS = 180;
+    private static final float DEFAULT_DENSITY_RATE = 40.0f;
+    private static final float MIN_EMISSION_SPEED = 10.0f;
+    private static final float MAX_EMISSION_SPEED = 15.0f;
+    private static final float TIMESTEP = 0.040f;
+    private static final float VISCOSITY = 0.00005f;
+    private static final float DIFFUSION_RATE = 0.0001f;
+    private static final int SOLVER_ITERATIONS = 40;
+
+    private static final int DEFAULT_SIMULATION_STEPS = 100;
     private static final int DEFAULT_EMITTER_COUNT = 12;
     private static final int MP4_FRAMES_PER_SECOND = 30;
+
 
     // 12 namespace colors represented as RGB triplets in the [0, 1] range.
     private static final float[][] NAMESPACE_COLORS = {
@@ -34,10 +40,11 @@ public class Main {
     };
 
     public static void main(String[] args) {
+        long programStartTime = System.nanoTime();
         SimulationConfig config = parseConfig(args);
 
         FluidGrid grid = new FluidGrid(config.gridWidth, config.gridHeight, 1.0f / Math.max(config.gridWidth, config.gridHeight));
-        SimulationParameters parameters = new SimulationParameters(0.016f, 0.0001f, 0.0001f, 20);
+        SimulationParameters parameters = new SimulationParameters(TIMESTEP, VISCOSITY, DIFFUSION_RATE, SOLVER_ITERATIONS);
 
         List<FluidSource> sources = List.of(new FluidSource(grid.width / 2, grid.height / 2, 40.0f));
         List<FluidEmitter> emitters = generateEdgeEmitters(grid, config.emitterCount, new Random());
@@ -96,6 +103,10 @@ public class Main {
         } else {
             System.out.println("Skipped MP4 export. Pass a 5th argument of 'true' to enable video output.");
         }
+
+        long programEndTime = System.nanoTime();
+        double elapsedSeconds = (programEndTime - programStartTime) / 1_000_000_000.0;
+        System.out.printf("Total runtime: %.3f seconds%n", elapsedSeconds);
     }
 
     private static SimulationConfig parseConfig(String[] args) {
@@ -263,17 +274,19 @@ public class Main {
             int x;
             int y;
 
-            if (side == 0) {
+            int offset = 3; // same as radius
+
+            if (side == 0) { // top
                 x = 1 + random.nextInt(grid.width);
-                y = 1;
-            } else if (side == 1) {
+                y = 1 + offset;
+            } else if (side == 1) { // bottom
                 x = 1 + random.nextInt(grid.width);
-                y = grid.height;
-            } else if (side == 2) {
-                x = 1;
+                y = grid.height - offset;
+            } else if (side == 2) { // left
+                x = 1 + offset;
                 y = 1 + random.nextInt(grid.height);
-            } else {
-                x = grid.width;
+            } else { // right
+                x = grid.width - offset;
                 y = 1 + random.nextInt(grid.height);
             }
 
@@ -281,7 +294,9 @@ public class Main {
             float towardCenterY = centerY - y;
             float towardCenterAngle = (float) Math.atan2(towardCenterY, towardCenterX);
 
-            float candidateAngle = towardCenterAngle + randomRange(random, -(float) (Math.PI / 2.0), (float) (Math.PI / 2.0));
+            float maxDeviation = (float) Math.toRadians(30.0);
+            float candidateAngle = towardCenterAngle
+                    + randomRange(random, -maxDeviation, maxDeviation);
             float directionX = (float) Math.cos(candidateAngle);
             float directionY = (float) Math.sin(candidateAngle);
             float inwardDot = directionX * towardCenterX + directionY * towardCenterY;
