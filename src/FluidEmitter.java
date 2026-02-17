@@ -17,6 +17,8 @@
 public record FluidEmitter(int gridX, int gridY, int radius, float densityRate, float angleRadians, float emissionSpeed,
                            float red, float green, float blue) {
 
+    private static final int MIN_RADIUS = 1;
+
     /**
      * Injects momentum into the fluid by adding velocity
      * in the emission direction.
@@ -32,15 +34,15 @@ public record FluidEmitter(int gridX, int gridY, int radius, float densityRate, 
                     "emitter out of bounds: (" + gridX + ", " + gridY + ")");
         }
 
-        // Radius of injection region (tweak 2–5 depending on grid resolution)
-        float radiusSquared = radius * radius;
+        int effectiveRadius = Math.max(radius, MIN_RADIUS);
+        float radiusSquared = effectiveRadius * effectiveRadius;
 
         // Base emission direction vector
         float baseVX = (float) Math.cos(angleRadians) * emissionSpeed;
         float baseVY = (float) Math.sin(angleRadians) * emissionSpeed;
 
-        for (int dy = -radius; dy <= radius; dy++) {
-            for (int dx = -radius; dx <= radius; dx++) {
+        for (int dy = -effectiveRadius; dy <= effectiveRadius; dy++) {
+            for (int dx = -effectiveRadius; dx <= effectiveRadius; dx++) {
 
                 int x = gridX + dx;
                 int y = gridY + dy;
@@ -57,12 +59,79 @@ public record FluidEmitter(int gridX, int gridY, int radius, float densityRate, 
 
                 // Linear falloff (1 at center → 0 at edge)
                 float distance = (float) Math.sqrt(distSquared);
-                float weight = 1.0f - (distance / radius);
+                float weight = 1.0f - (distance / effectiveRadius);
 
                 int index = grid.index(x, y);
 
                 velocity.readVelocityX[index] += baseVX * weight;
                 velocity.readVelocityY[index] += baseVY * weight;
+            }
+        }
+    }
+
+    /**
+     * Injects density over the same circular region as velocity so
+     * increasing emitter radius increases stream thickness.
+     */
+    public void applyDensity(ScalarField redDensityField, ScalarField greenDensityField, ScalarField blueDensityField,
+                             FluidGrid grid, float timeStepSeconds) {
+        if (!grid.inBounds(gridX, gridY)) {
+            throw new IllegalArgumentException(
+                    "emitter out of bounds: (" + gridX + ", " + gridY + ")");
+        }
+
+        int effectiveRadius = Math.max(radius, MIN_RADIUS);
+        float radiusSquared = effectiveRadius * effectiveRadius;
+
+        float weightedCellCount = 0.0f;
+        for (int dy = -effectiveRadius; dy <= effectiveRadius; dy++) {
+            for (int dx = -effectiveRadius; dx <= effectiveRadius; dx++) {
+                int x = gridX + dx;
+                int y = gridY + dy;
+
+                if (!grid.inBounds(x, y)) {
+                    continue;
+                }
+
+                float distSquared = dx * dx + dy * dy;
+                if (distSquared > radiusSquared) {
+                    continue;
+                }
+
+                float distance = (float) Math.sqrt(distSquared);
+                float weight = 1.0f - (distance / effectiveRadius);
+                weightedCellCount += weight;
+            }
+        }
+
+        if (weightedCellCount <= 0.0f) {
+            return;
+        }
+
+        float densityPerWeight = timeStepSeconds * densityRate / weightedCellCount;
+
+        for (int dy = -effectiveRadius; dy <= effectiveRadius; dy++) {
+            for (int dx = -effectiveRadius; dx <= effectiveRadius; dx++) {
+                int x = gridX + dx;
+                int y = gridY + dy;
+
+                if (!grid.inBounds(x, y)) {
+                    continue;
+                }
+
+                float distSquared = dx * dx + dy * dy;
+                if (distSquared > radiusSquared) {
+                    continue;
+                }
+
+                float distance = (float) Math.sqrt(distSquared);
+                float weight = 1.0f - (distance / effectiveRadius);
+                float weightedDensity = densityPerWeight * weight;
+
+                int index = grid.index(x, y);
+                redDensityField.readValues[index] += weightedDensity * red;
+                greenDensityField.readValues[index] += weightedDensity * green;
+                blueDensityField.readValues[index] += weightedDensity * blue;
             }
         }
     }

@@ -102,13 +102,7 @@ public class FluidSolver {
             if (!grid.inBounds(emitter.gridX(), emitter.gridY())) {
                 continue;
             }
-
-            int index = grid.index(emitter.gridX(), emitter.gridY());
-
-            redDensityField.readValues[index] += dt * emitter.densityRate() * emitter.red();
-            greenDensityField.readValues[index] += dt * emitter.densityRate() * emitter.green();
-            blueDensityField.readValues[index] += dt * emitter.densityRate() * emitter.blue();
-
+            emitter.applyDensity(redDensityField, greenDensityField, blueDensityField, grid, dt);
             emitter.applyVelocity(velocityField, grid);
         }
     }
