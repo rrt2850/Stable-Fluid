@@ -73,6 +73,7 @@ public class FluidSolver {
         projectVelocity();
 
         advectVelocity();
+        applyVorticityConfinement();
         projectVelocity();
 
         diffuseDensity(redDensityField);
@@ -248,6 +249,65 @@ public class FluidSolver {
         );
 
         velocityField.swapBuffers();
+    }
+
+    private void applyVorticityConfinement() {
+        float confinementStrength = parameters.getVorticityConfinement();
+        if (confinementStrength <= 0.0f) {
+            return;
+        }
+
+        float dt = parameters.getTimeStep();
+        float invTwoCellSize = 0.5f / grid.cellSize;
+        float[] curlMagnitude = new float[grid.totalCellCount];
+
+        IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
+            for (int x = 1; x <= grid.width; x++) {
+                int i = grid.index(x, y);
+
+                int left = grid.index(x - 1, y);
+                int right = grid.index(x + 1, y);
+                int down = grid.index(x, y - 1);
+                int up = grid.index(x, y + 1);
+
+                float dVxDy = (velocityField.readVelocityX[up] - velocityField.readVelocityX[down]) * invTwoCellSize;
+                float dVyDx = (velocityField.readVelocityY[right] - velocityField.readVelocityY[left]) * invTwoCellSize;
+
+                curlMagnitude[i] = Math.abs(dVyDx - dVxDy);
+            }
+        });
+
+        IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
+            for (int x = 1; x <= grid.width; x++) {
+                int i = grid.index(x, y);
+
+                int left = grid.index(x - 1, y);
+                int right = grid.index(x + 1, y);
+                int down = grid.index(x, y - 1);
+                int up = grid.index(x, y + 1);
+
+                float dVxDy = (velocityField.readVelocityX[up] - velocityField.readVelocityX[down]) * invTwoCellSize;
+                float dVyDx = (velocityField.readVelocityY[right] - velocityField.readVelocityY[left]) * invTwoCellSize;
+                float vorticity = dVyDx - dVxDy;
+
+                float gradX = (curlMagnitude[right] - curlMagnitude[left]) * invTwoCellSize;
+                float gradY = (curlMagnitude[up] - curlMagnitude[down]) * invTwoCellSize;
+
+                float gradLength = (float) Math.sqrt(gradX * gradX + gradY * gradY) + 1e-6f;
+                float normalX = gradX / gradLength;
+                float normalY = gradY / gradLength;
+
+                float forceScale = confinementStrength * grid.cellSize;
+                float forceX = forceScale * normalY * vorticity;
+                float forceY = -forceScale * normalX * vorticity;
+
+                velocityField.readVelocityX[i] += dt * forceX;
+                velocityField.readVelocityY[i] += dt * forceY;
+            }
+        });
+
+        boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.H_VELOCITY, velocityField.readVelocityX, grid);
+        boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.V_VELOCITY, velocityField.readVelocityY, grid);
     }
 
     private void diffuseDensity(ScalarField densityField) {

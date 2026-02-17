@@ -27,24 +27,32 @@ public class SimulationParameters {
     private int linearSolverIterations;
 
     /**
+     * Strength of vorticity confinement force used to re-inject small-scale swirl.
+     * 0 disables the force entirely.
+     */
+    private float vorticityConfinement;
+
+    /**
      * Constructs a parameter set with explicit values, more detail in
      * SimulationParameters.java
      */
     public SimulationParameters(float timeStep,
                                 float viscosity,
                                 float diffusionRate,
-                                int linearSolverIterations) {
+                                int linearSolverIterations,
+                                float vorticityConfinement) {
         setTimeStep(timeStep);
         setViscosity(viscosity);
         setDiffusionRate(diffusionRate);
         setLinearSolverIterations(linearSolverIterations);
+        setVorticityConfinement(vorticityConfinement);
     }
 
     /**
      * Constructs a parameter set with some defaults
      */
     public SimulationParameters() {
-        this(0.016f, 0.0001f, 0.0001f, 20);
+        this(0.016f, 0.0001f, 0.0001f, 20, 0.0f);
     }
 
     public float getTimeStep() {
@@ -89,5 +97,16 @@ public class SimulationParameters {
             throw new IllegalArgumentException("linearSolverIterations must be > 0");
         }
         this.linearSolverIterations = linearSolverIterations;
+    }
+
+    public float getVorticityConfinement() {
+        return vorticityConfinement;
+    }
+
+    public void setVorticityConfinement(float vorticityConfinement) {
+        if (vorticityConfinement < 0f) {
+            throw new IllegalArgumentException("vorticityConfinement must be >= 0");
+        }
+        this.vorticityConfinement = vorticityConfinement;
     }
 }
