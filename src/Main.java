@@ -1,4 +1,5 @@
 import javax.imageio.ImageIO;
+import java.awt.Toolkit;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -18,6 +19,7 @@ public class Main {
     private static final float DIFFUSION_RATE = 0.0001f;
     private static final int SOLVER_ITERATIONS = 40;
 
+    private static final float EMITTER_ANGLE_OFFSET_RADIANS = (float) (Math.PI / 3.0);
     private static final int DEFAULT_SIMULATION_STEPS = 100;
     private static final int DEFAULT_EMITTER_COUNT = 12;
     private static final int MP4_FRAMES_PER_SECOND = 30;
@@ -129,6 +131,7 @@ public class Main {
             if (tempFramesDirectory != null) {
                 deleteDirectoryRecursively(tempFramesDirectory.toFile());
             }
+            Toolkit.getDefaultToolkit().beep();
         }
 
         long programEndTime = System.nanoTime();
