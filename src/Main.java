@@ -12,9 +12,9 @@ import java.util.Random;
 
 public class Main {
     private static final float DEFAULT_DENSITY_RATE = 30.0f;
-    private static final float MIN_EMISSION_SPEED = 3.0f;
-    private static final float MAX_EMISSION_SPEED = 6.0f;
-    private static final float TIMESTEP = 0.500f;
+    private static final float MIN_EMISSION_SPEED = 0.35f;
+    private static final float MAX_EMISSION_SPEED = 0.9f;
+    private static final float TIMESTEP = 0.016f;
     private static final float VISCOSITY = 0.00005f;
     private static final float DIFFUSION_RATE = 0.0001f;
     private static final int SOLVER_ITERATIONS = 40;
@@ -49,7 +49,7 @@ public class Main {
         FluidGrid grid = new FluidGrid(config.gridWidth, config.gridHeight, 1.0f / Math.max(config.gridWidth, config.gridHeight));
         SimulationParameters parameters = new SimulationParameters(TIMESTEP, VISCOSITY, DIFFUSION_RATE, SOLVER_ITERATIONS);
 
-        List<FluidSource> sources = List.of(new FluidSource(grid.width / 2, grid.height / 2, 40.0f));
+        List<FluidSource> sources = List.of();
         List<FluidEmitter> emitters = generateEdgeEmitters(grid, config.emitterCount, new Random());
 
         FluidSolver solver = new FluidSolver(grid, parameters, sources, emitters);
@@ -311,7 +311,7 @@ public class Main {
             }
 
             float towardCenterX = centerX - x;
-            float towardCenterY = y - centerY; // <-- flipped
+            float towardCenterY = centerY - y;
 
             float candidateAngle = (float) Math.atan2(towardCenterY, towardCenterX);
 
