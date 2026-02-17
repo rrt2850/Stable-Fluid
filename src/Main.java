@@ -1,4 +1,5 @@
 import javax.imageio.ImageIO;
+import java.awt.Toolkit;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -123,6 +124,7 @@ public class Main {
             if (tempFramesDirectory != null) {
                 deleteDirectoryRecursively(tempFramesDirectory.toFile());
             }
+            Toolkit.getDefaultToolkit().beep();
         }
     }
 
