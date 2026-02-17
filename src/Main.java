@@ -14,7 +14,24 @@ public class Main {
     private static final float MIN_EMISSION_SPEED = 1.4f;
     private static final float MAX_EMISSION_SPEED = 3.0f;
     private static final int DEFAULT_SIMULATION_STEPS = 180;
+    private static final int DEFAULT_EMITTER_COUNT = 12;
     private static final int MP4_FRAMES_PER_SECOND = 30;
+
+    // 12 namespace colors represented as RGB triplets in the [0, 1] range.
+    private static final float[][] NAMESPACE_COLORS = {
+            {0.0f, 0.69f, 0.94f},  // azure
+            {0.0f, 0.78f, 0.58f},  // mint
+            {0.55f, 0.80f, 0.26f}, // lime
+            {0.98f, 0.82f, 0.20f}, // yellow
+            {1.0f, 0.63f, 0.0f},   // orange
+            {0.95f, 0.36f, 0.20f}, // vermillion
+            {0.87f, 0.22f, 0.52f}, // magenta
+            {0.67f, 0.27f, 0.87f}, // purple
+            {0.31f, 0.42f, 0.94f}, // indigo
+            {0.18f, 0.68f, 0.98f}, // sky
+            {0.0f, 0.73f, 0.75f},  // teal
+            {0.42f, 0.75f, 0.45f}  // green
+    };
 
     public static void main(String[] args) {
         SimulationConfig config = parseConfig(args);
@@ -30,28 +47,37 @@ public class Main {
         System.out.println("Generated " + emitters.size() + " edge emitters:");
         for (int i = 0; i < emitters.size(); i++) {
             FluidEmitter emitter = emitters.get(i);
+            int red = Math.round(clamp(emitter.red, 0.0f, 1.0f) * 255.0f);
+            int green = Math.round(clamp(emitter.green, 0.0f, 1.0f) * 255.0f);
+            int blue = Math.round(clamp(emitter.blue, 0.0f, 1.0f) * 255.0f);
             System.out.printf(
-                    "  #%d at (%d,%d) angle=%.2f rad speed=%.2f%n",
+                    "  #%d at (%d,%d) angle=%.2f rad speed=%.2f color=(%d,%d,%d)%n",
                     i + 1,
                     emitter.gridX,
                     emitter.gridY,
                     emitter.angleRadians,
-                    emitter.emissionSpeed
+                    emitter.emissionSpeed,
+                    red,
+                    green,
+                    blue
             );
         }
 
         List<BufferedImage> frames = new ArrayList<>();
         for (int step = 1; step <= config.simulationSteps; step++) {
             solver.step();
-            frames.add(createDensityImage(grid, solver.densityField));
+            frames.add(createDensityImage(grid, solver));
             System.out.println("Step " + step + " divergence RMS=" + solver.computeVelocityDivergenceRms());
         }
 
         int center = grid.index((grid.width + 1) / 2, (grid.height + 1) / 2);
-        System.out.println("Simulation ran. Center density=" + solver.densityField.readValues[center]);
+        float centerDensity = solver.redDensityField.readValues[center]
+                + solver.greenDensityField.readValues[center]
+                + solver.blueDensityField.readValues[center];
+        System.out.println("Simulation ran. Center density=" + centerDensity);
 
         String outputPath = "density.png";
-        saveDensityToPng(grid, solver.densityField, outputPath);
+        saveDensityToPng(grid, solver, outputPath);
         System.out.println("Saved density image to " + outputPath);
 
         String videoOutputPath = "density-diffusion.mp4";
@@ -66,7 +92,7 @@ public class Main {
     private static SimulationConfig parseConfig(String[] args) {
         int gridWidth = parsePositiveInt(args, 0, 128, "grid width");
         int gridHeight = parsePositiveInt(args, 1, 128, "grid height");
-        int emitterCount = parsePositiveInt(args, 2, 8, "emitter count");
+        int emitterCount = parsePositiveInt(args, 2, DEFAULT_EMITTER_COUNT, "emitter count");
         int simulationSteps = parsePositiveInt(args, 3, DEFAULT_SIMULATION_STEPS, "simulation steps");
 
         return new SimulationConfig(gridWidth, gridHeight, emitterCount, simulationSteps);
@@ -88,8 +114,8 @@ public class Main {
         }
     }
 
-    private static void saveDensityToPng(FluidGrid grid, ScalarField densityField, String outputPath) {
-        BufferedImage image = createDensityImage(grid, densityField);
+    private static void saveDensityToPng(FluidGrid grid, FluidSolver solver, String outputPath) {
+        BufferedImage image = createDensityImage(grid, solver);
 
         try {
             ImageIO.write(image, "png", new File(outputPath));
@@ -98,25 +124,37 @@ public class Main {
         }
     }
 
-    private static BufferedImage createDensityImage(FluidGrid grid, ScalarField densityField) {
+    private static BufferedImage createDensityImage(FluidGrid grid, FluidSolver solver) {
         BufferedImage image = new BufferedImage(grid.width, grid.height, BufferedImage.TYPE_INT_ARGB);
 
-        float maxDensity = 0.0f;
+        float maxRedDensity = 0.0f;
+        float maxGreenDensity = 0.0f;
+        float maxBlueDensity = 0.0f;
         for (int y = 1; y <= grid.height; y++) {
             for (int x = 1; x <= grid.width; x++) {
                 int index = grid.index(x, y);
-                maxDensity = Math.max(maxDensity, densityField.readValues[index]);
+                maxRedDensity = Math.max(maxRedDensity, solver.redDensityField.readValues[index]);
+                maxGreenDensity = Math.max(maxGreenDensity, solver.greenDensityField.readValues[index]);
+                maxBlueDensity = Math.max(maxBlueDensity, solver.blueDensityField.readValues[index]);
             }
         }
 
-        float normalization = maxDensity > 0.0f ? maxDensity : 1.0f;
+        float redNormalization = maxRedDensity > 0.0f ? maxRedDensity : 1.0f;
+        float greenNormalization = maxGreenDensity > 0.0f ? maxGreenDensity : 1.0f;
+        float blueNormalization = maxBlueDensity > 0.0f ? maxBlueDensity : 1.0f;
 
         for (int y = 1; y <= grid.height; y++) {
             for (int x = 1; x <= grid.width; x++) {
                 int index = grid.index(x, y);
-                float normalized = clamp(densityField.readValues[index] / normalization, 0.0f, 1.0f);
-                int grayscale = Math.round(normalized * 255.0f);
-                int argb = (255 << 24) | (grayscale << 16) | (grayscale << 8) | grayscale;
+                float normalizedRed = clamp(solver.redDensityField.readValues[index] / redNormalization, 0.0f, 1.0f);
+                float normalizedGreen = clamp(solver.greenDensityField.readValues[index] / greenNormalization, 0.0f, 1.0f);
+                float normalizedBlue = clamp(solver.blueDensityField.readValues[index] / blueNormalization, 0.0f, 1.0f);
+
+                int red = Math.round(normalizedRed * 255.0f);
+                int green = Math.round(normalizedGreen * 255.0f);
+                int blue = Math.round(normalizedBlue * 255.0f);
+
+                int argb = (255 << 24) | (red << 16) | (green << 8) | blue;
                 image.setRGB(x - 1, y - 1, argb);
             }
         }
@@ -224,8 +262,18 @@ public class Main {
                 continue;
             }
 
+            float[] emitterColor = NAMESPACE_COLORS[emitters.size() % NAMESPACE_COLORS.length];
             float emissionSpeed = randomRange(random, MIN_EMISSION_SPEED, MAX_EMISSION_SPEED);
-            emitters.add(new FluidEmitter(x, y, DEFAULT_DENSITY_RATE, candidateAngle, emissionSpeed));
+            emitters.add(new FluidEmitter(
+                    x,
+                    y,
+                    DEFAULT_DENSITY_RATE,
+                    candidateAngle,
+                    emissionSpeed,
+                    emitterColor[0],
+                    emitterColor[1],
+                    emitterColor[2]
+            ));
         }
 
         return emitters;

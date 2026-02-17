@@ -31,29 +31,37 @@ public class FluidEmitter {
      */
     public final float emissionSpeed;
 
+    /**
+     * Red component of injected density in the [0, 1] range.
+     */
+    public final float red;
+
+    /**
+     * Green component of injected density in the [0, 1] range.
+     */
+    public final float green;
+
+    /**
+     * Blue component of injected density in the [0, 1] range.
+     */
+    public final float blue;
+
     public FluidEmitter(int gridX,
                         int gridY,
                         float densityRate,
                         float angleRadians,
-                        float emissionSpeed) {
+                        float emissionSpeed,
+                        float red,
+                        float green,
+                        float blue) {
         this.gridX = gridX;
         this.gridY = gridY;
         this.densityRate = densityRate;
         this.angleRadians = angleRadians;
         this.emissionSpeed = emissionSpeed;
-    }
-
-    /**
-     * Injects density into the fluid.
-     *
-     * This modifies the authoritative density field.
-     */
-    public void applyDensity(ScalarField density, FluidGrid grid) {
-        if (!grid.inBounds(gridX, gridY)) {
-            throw new IllegalArgumentException("emitter out of bounds: (" + gridX + ", " + gridY + ")");
-        }
-        int index = grid.index(gridX, gridY);
-        density.readValues[index] += densityRate;
+        this.red = red;
+        this.green = green;
+        this.blue = blue;
     }
 
     /**

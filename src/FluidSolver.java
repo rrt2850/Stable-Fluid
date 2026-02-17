@@ -16,7 +16,9 @@ public class FluidSolver {
     public final SimulationParameters parameters;
 
     public final VectorField velocityField;
-    public final ScalarField densityField;
+    public final ScalarField redDensityField;
+    public final ScalarField greenDensityField;
+    public final ScalarField blueDensityField;
 
     public final ScalarField pressureField;
     public final ScalarField divergenceField;
@@ -34,7 +36,9 @@ public class FluidSolver {
         this.parameters = Objects.requireNonNull(parameters, "parameters must not be null");
 
         this.velocityField = new VectorField(grid.totalCellCount);
-        this.densityField = new ScalarField(grid.totalCellCount);
+        this.redDensityField = new ScalarField(grid.totalCellCount);
+        this.greenDensityField = new ScalarField(grid.totalCellCount);
+        this.blueDensityField = new ScalarField(grid.totalCellCount);
 
         this.pressureField = new ScalarField(grid.totalCellCount);
         this.divergenceField = new ScalarField(grid.totalCellCount);
@@ -70,8 +74,13 @@ public class FluidSolver {
         advectVelocity();
         projectVelocity();
 
-        diffuseDensity();
-        advectDensity();
+        diffuseDensity(redDensityField);
+        diffuseDensity(greenDensityField);
+        diffuseDensity(blueDensityField);
+
+        advectDensity(redDensityField);
+        advectDensity(greenDensityField);
+        advectDensity(blueDensityField);
     }
 
     private void addSources() {
@@ -83,7 +92,9 @@ public class FluidSolver {
                 continue;
             }
             int index = grid.index(source.gridX, source.gridY);
-            densityField.readValues[index] += dt * source.strength;
+            redDensityField.readValues[index] += dt * source.strength;
+            greenDensityField.readValues[index] += dt * source.strength;
+            blueDensityField.readValues[index] += dt * source.strength;
         }
 
         for (FluidEmitter emitter : emitters) {
@@ -93,7 +104,9 @@ public class FluidSolver {
 
             int index = grid.index(emitter.gridX, emitter.gridY);
 
-            densityField.readValues[index] += dt * emitter.densityRate;
+            redDensityField.readValues[index] += dt * emitter.densityRate * emitter.red;
+            greenDensityField.readValues[index] += dt * emitter.densityRate * emitter.green;
+            blueDensityField.readValues[index] += dt * emitter.densityRate * emitter.blue;
 
             float vx = (float) Math.cos(emitter.angleRadians) * emitter.emissionSpeed;
             float vy = (float) Math.sin(emitter.angleRadians) * emitter.emissionSpeed;
@@ -246,7 +259,7 @@ public class FluidSolver {
         velocityField.swapBuffers();
     }
 
-    private void diffuseDensity() {
+    private void diffuseDensity(ScalarField densityField) {
         float timeStep = parameters.getTimeStep();
         float diffusionRate = parameters.getDiffusionRate();
 
@@ -266,7 +279,7 @@ public class FluidSolver {
         densityField.swapBuffers();
     }
 
-    private void advectDensity() {
+    private void advectDensity(ScalarField densityField) {
 
         float timeStepSeconds = parameters.getTimeStep();
 
