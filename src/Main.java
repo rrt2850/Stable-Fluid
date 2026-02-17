@@ -18,6 +18,7 @@ public class Main {
     private static final float VISCOSITY = 0.00005f;
     private static final float DIFFUSION_RATE = 0.000005f;
     private static final int SOLVER_ITERATIONS = 40;
+    private static final float VORTICITY_CONFINEMENT = 2.0f;
     private static final int EMITTER_RADIUS = 10;
 
     private static final float EMITTER_ANGLE_OFFSET_RADIANS = (float) (Math.PI / 3.0);
@@ -49,7 +50,7 @@ public class Main {
         SimulationConfig config = parseConfig(args);
 
         FluidGrid grid = new FluidGrid(config.gridWidth, config.gridHeight, 1.0f / Math.max(config.gridWidth, config.gridHeight));
-        SimulationParameters parameters = new SimulationParameters(TIMESTEP, VISCOSITY, DIFFUSION_RATE, SOLVER_ITERATIONS);
+        SimulationParameters parameters = new SimulationParameters(TIMESTEP, VISCOSITY, DIFFUSION_RATE, SOLVER_ITERATIONS, VORTICITY_CONFINEMENT);
 
         List<FluidSource> sources = List.of();
 
