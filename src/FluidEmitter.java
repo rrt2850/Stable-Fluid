@@ -18,15 +18,13 @@ public record FluidEmitter(int gridX, int gridY, int radius, float densityRate, 
                            float red, float green, float blue) {
 
     private static final int MIN_RADIUS = 1;
+    private static final float VELOCITY_RADIUS_FALLOFF_EXPONENT = 0.5f;
 
     /**
-     * Injects momentum into the fluid by adding velocity
-     * in the emission direction.
-     */
-    /**
-     * Injects momentum into the fluid over a small circular region
+     * Injects momentum into the fluid over a circular region
      * with radial falloff so the emission behaves like a jet instead
-     * of a single-cell impulse.
+     * of a single-cell impulse. Velocity is damped for larger radii
+     * so widening the emitter does not linearly boost total momentum.
      */
     public void applyVelocity(VectorField velocity, FluidGrid grid) {
         if (!grid.inBounds(gridX, gridY)) {
@@ -37,37 +35,10 @@ public record FluidEmitter(int gridX, int gridY, int radius, float densityRate, 
         int effectiveRadius = Math.max(radius, MIN_RADIUS);
         float radiusSquared = effectiveRadius * effectiveRadius;
 
-        float weightedCellCount = 0.0f;
-        for (int dy = -effectiveRadius; dy <= effectiveRadius; dy++) {
-            for (int dx = -effectiveRadius; dx <= effectiveRadius; dx++) {
-
-                int x = gridX + dx;
-                int y = gridY + dy;
-
-                if (!grid.inBounds(x, y)) {
-                    continue;
-                }
-
-                float distSquared = dx * dx + dy * dy;
-                if (distSquared > radiusSquared) {
-                    continue;
-                }
-
-                float distance = (float) Math.sqrt(distSquared);
-                float weight = 1.0f - (distance / effectiveRadius);
-                weightedCellCount += weight;
-            }
-        }
-
-        if (weightedCellCount <= 0.0f) {
-            return;
-        }
-
         // Base emission direction vector
-        float baseVX = (float) Math.cos(angleRadians) * emissionSpeed;
-        float baseVY = (float) Math.sin(angleRadians) * emissionSpeed;
-        float velocityPerWeightX = baseVX / weightedCellCount;
-        float velocityPerWeightY = baseVY / weightedCellCount;
+        float velocityRadiusScale = 1.0f / (float) Math.pow(effectiveRadius, VELOCITY_RADIUS_FALLOFF_EXPONENT);
+        float velocityPerWeightX = (float) Math.cos(angleRadians) * emissionSpeed * velocityRadiusScale;
+        float velocityPerWeightY = (float) Math.sin(angleRadians) * emissionSpeed * velocityRadiusScale;
 
         for (int dy = -effectiveRadius; dy <= effectiveRadius; dy++) {
             for (int dx = -effectiveRadius; dx <= effectiveRadius; dx++) {
@@ -98,8 +69,9 @@ public record FluidEmitter(int gridX, int gridY, int radius, float densityRate, 
     }
 
     /**
-     * Injects density over the same circular region as velocity so
-     * increasing emitter radius increases stream thickness.
+     * Injects density over the same circular region as velocity.
+     * Density is not normalized by area, so increasing emitter radius
+     * makes the stream visibly wider and denser.
      */
     public void applyDensity(ScalarField redDensityField, ScalarField greenDensityField, ScalarField blueDensityField,
                              FluidGrid grid, float timeStepSeconds) {
@@ -111,32 +83,7 @@ public record FluidEmitter(int gridX, int gridY, int radius, float densityRate, 
         int effectiveRadius = Math.max(radius, MIN_RADIUS);
         float radiusSquared = effectiveRadius * effectiveRadius;
 
-        float weightedCellCount = 0.0f;
-        for (int dy = -effectiveRadius; dy <= effectiveRadius; dy++) {
-            for (int dx = -effectiveRadius; dx <= effectiveRadius; dx++) {
-                int x = gridX + dx;
-                int y = gridY + dy;
-
-                if (!grid.inBounds(x, y)) {
-                    continue;
-                }
-
-                float distSquared = dx * dx + dy * dy;
-                if (distSquared > radiusSquared) {
-                    continue;
-                }
-
-                float distance = (float) Math.sqrt(distSquared);
-                float weight = 1.0f - (distance / effectiveRadius);
-                weightedCellCount += weight;
-            }
-        }
-
-        if (weightedCellCount <= 0.0f) {
-            return;
-        }
-
-        float densityPerWeight = timeStepSeconds * densityRate / weightedCellCount;
+        float densityPerWeight = timeStepSeconds * densityRate;
 
         for (int dy = -effectiveRadius; dy <= effectiveRadius; dy++) {
             for (int dx = -effectiveRadius; dx <= effectiveRadius; dx++) {
