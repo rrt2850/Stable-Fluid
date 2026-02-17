@@ -40,6 +40,9 @@ public class FluidSource {
      * @param grid    simulation grid
      */
     public void applyToDensity(ScalarField density, FluidGrid grid) {
+        if (!grid.inBounds(gridX, gridY)) {
+            throw new IllegalArgumentException("source out of bounds: (" + gridX + ", " + gridY + ")");
+        }
         int index = grid.index(gridX, gridY);
         density.readValues[index] += strength;
     }

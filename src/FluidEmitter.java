@@ -49,6 +49,9 @@ public class FluidEmitter {
      * This modifies the authoritative density field.
      */
     public void applyDensity(ScalarField density, FluidGrid grid) {
+        if (!grid.inBounds(gridX, gridY)) {
+            throw new IllegalArgumentException("emitter out of bounds: (" + gridX + ", " + gridY + ")");
+        }
         int index = grid.index(gridX, gridY);
         density.readValues[index] += densityRate;
     }
@@ -58,6 +61,9 @@ public class FluidEmitter {
      * in the emission direction.
      */
     public void applyVelocity(VectorField velocity, FluidGrid grid) {
+        if (!grid.inBounds(gridX, gridY)) {
+            throw new IllegalArgumentException("emitter out of bounds: (" + gridX + ", " + gridY + ")");
+        }
         int index = grid.index(gridX, gridY);
 
         float velocityX = (float) Math.cos(angleRadians) * emissionSpeed;

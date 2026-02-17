@@ -1,5 +1,6 @@
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * High-level controller that advances the fluid simulation forward in time.
@@ -29,8 +30,8 @@ public class FluidSolver {
             List<FluidSource> densitySources,
             List<FluidEmitter> emitters
     ) {
-        this.grid = grid;
-        this.parameters = parameters;
+        this.grid = Objects.requireNonNull(grid, "grid must not be null");
+        this.parameters = Objects.requireNonNull(parameters, "parameters must not be null");
 
         this.velocityField = new VectorField(grid.totalCellCount);
         this.densityField = new ScalarField(grid.totalCellCount);
@@ -43,17 +44,19 @@ public class FluidSolver {
 
         // Null-safe initialization
         this.densitySources = (densitySources != null)
-                ? densitySources
+                ? new ArrayList<>(densitySources)
                 : new ArrayList<>();
 
         this.emitters = (emitters != null)
-                ? emitters
+                ? new ArrayList<>(emitters)
                 : new ArrayList<>();
 
         for (FluidSource source : this.densitySources) {
+            Objects.requireNonNull(source, "density source must not be null");
             validateInBounds(source.gridX, source.gridY, "density source");
         }
         for (FluidEmitter emitter : this.emitters) {
+            Objects.requireNonNull(emitter, "emitter must not be null");
             validateInBounds(emitter.gridX, emitter.gridY, "emitter");
         }
     }
@@ -332,11 +335,13 @@ public class FluidSolver {
     }
 
     public void addDensitySource(FluidSource source) {
+        Objects.requireNonNull(source, "density source must not be null");
         validateInBounds(source.gridX, source.gridY, "density source");
         densitySources.add(source);
     }
 
     public void addEmitter(FluidEmitter emitter) {
+        Objects.requireNonNull(emitter, "emitter must not be null");
         validateInBounds(emitter.gridX, emitter.gridY, "emitter");
         emitters.add(emitter);
     }
