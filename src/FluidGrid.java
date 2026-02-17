@@ -52,6 +52,11 @@ public class FluidGrid {
      * @return index into a 1D field array
      */
     public int index(int x, int y) {
+        if (x < 0 || x > width + 1 || y < 0 || y > height + 1) {
+            throw new IllegalArgumentException(
+                    "grid coordinates out of range: (" + x + ", " + y + ")"
+            );
+        }
         return x + (width + 2) * y;
     }
 
