@@ -19,6 +19,7 @@ public class Main {
     private static final float DIFFUSION_RATE = 0.0001f;
     private static final int SOLVER_ITERATIONS = 25;
     private static final int EMITTER_RADIUS = 20; // Explodes around 35
+    private static final float EMITTER_ANGLE_VARIATION_DEGREES = 30.0f;
     private static final float VORTICITY_CONFINEMENT = 2.1f;
 
     private static final int DEFAULT_SIMULATION_STEPS = 100;
@@ -318,7 +319,13 @@ public class Main {
             float towardCenterX = centerX - x;
             float towardCenterY = centerY - y;
 
-            float candidateAngle = (float) Math.toDegrees(Math.atan2(towardCenterY, towardCenterX));
+            float centerAngle = (float) Math.toDegrees(Math.atan2(towardCenterY, towardCenterX));
+            float randomAngleOffset = randomRange(
+                    random,
+                    -EMITTER_ANGLE_VARIATION_DEGREES,
+                    EMITTER_ANGLE_VARIATION_DEGREES
+            );
+            float candidateAngle = centerAngle + randomAngleOffset;
 
 
             float[] emitterColor = NAMESPACE_COLORS[emitters.size() % NAMESPACE_COLORS.length];
