@@ -2,14 +2,19 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
 public class Main {
     private static final float DEFAULT_DENSITY_RATE = 25.0f;
-    private static final float MIN_EMISSION_SPEED = 0.2f;
-    private static final float MAX_EMISSION_SPEED = 1.2f;
+    private static final float MIN_EMISSION_SPEED = 1.4f;
+    private static final float MAX_EMISSION_SPEED = 3.0f;
+    private static final int DEFAULT_SIMULATION_STEPS = 180;
+    private static final int MP4_FRAMES_PER_SECOND = 30;
 
     public static void main(String[] args) {
         SimulationConfig config = parseConfig(args);
@@ -35,8 +40,10 @@ public class Main {
             );
         }
 
-        for (int step = 1; step <= 5; step++) {
+        List<BufferedImage> frames = new ArrayList<>();
+        for (int step = 1; step <= config.simulationSteps; step++) {
             solver.step();
+            frames.add(createDensityImage(grid, solver.densityField));
             System.out.println("Step " + step + " divergence RMS=" + solver.computeVelocityDivergenceRms());
         }
 
@@ -46,14 +53,23 @@ public class Main {
         String outputPath = "density.png";
         saveDensityToPng(grid, solver.densityField, outputPath);
         System.out.println("Saved density image to " + outputPath);
+
+        String videoOutputPath = "density-diffusion.mp4";
+        boolean mp4Exported = saveDensityToMp4(frames, videoOutputPath);
+        if (mp4Exported) {
+            System.out.println("Saved density animation to " + videoOutputPath);
+        } else {
+            System.out.println("Skipped MP4 export because ffmpeg is not available on PATH.");
+        }
     }
 
     private static SimulationConfig parseConfig(String[] args) {
         int gridWidth = parsePositiveInt(args, 0, 128, "grid width");
         int gridHeight = parsePositiveInt(args, 1, 128, "grid height");
         int emitterCount = parsePositiveInt(args, 2, 8, "emitter count");
+        int simulationSteps = parsePositiveInt(args, 3, DEFAULT_SIMULATION_STEPS, "simulation steps");
 
-        return new SimulationConfig(gridWidth, gridHeight, emitterCount);
+        return new SimulationConfig(gridWidth, gridHeight, emitterCount, simulationSteps);
     }
 
     private static int parsePositiveInt(String[] args, int index, int defaultValue, String argumentName) {
@@ -73,6 +89,16 @@ public class Main {
     }
 
     private static void saveDensityToPng(FluidGrid grid, ScalarField densityField, String outputPath) {
+        BufferedImage image = createDensityImage(grid, densityField);
+
+        try {
+            ImageIO.write(image, "png", new File(outputPath));
+        } catch (IOException exception) {
+            throw new RuntimeException("Failed to write density PNG to " + outputPath, exception);
+        }
+    }
+
+    private static BufferedImage createDensityImage(FluidGrid grid, ScalarField densityField) {
         BufferedImage image = new BufferedImage(grid.width, grid.height, BufferedImage.TYPE_INT_ARGB);
 
         float maxDensity = 0.0f;
@@ -95,11 +121,70 @@ public class Main {
             }
         }
 
-        try {
-            ImageIO.write(image, "png", new File(outputPath));
-        } catch (IOException exception) {
-            throw new RuntimeException("Failed to write density PNG to " + outputPath, exception);
+        return image;
+    }
+
+    private static boolean saveDensityToMp4(List<BufferedImage> frames, String outputPath) {
+        if (frames.isEmpty()) {
+            throw new IllegalArgumentException("At least one frame is required to create an MP4.");
         }
+
+        Path tempFramesDirectory = null;
+
+        try {
+            tempFramesDirectory = Files.createTempDirectory("stable-fluid-frames-");
+
+            for (int i = 0; i < frames.size(); i++) {
+                Path framePath = tempFramesDirectory.resolve(String.format("frame-%05d.png", i));
+                ImageIO.write(frames.get(i), "png", framePath.toFile());
+            }
+
+            Path tempOutput = tempFramesDirectory.resolve("density-diffusion.mp4");
+            ProcessBuilder ffmpegBuilder = new ProcessBuilder(
+                    "ffmpeg",
+                    "-y",
+                    "-framerate", String.valueOf(MP4_FRAMES_PER_SECOND),
+                    "-i", tempFramesDirectory.resolve("frame-%05d.png").toString(),
+                    "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p",
+                    tempOutput.toString()
+            );
+            ffmpegBuilder.inheritIO();
+            Process ffmpegProcess = ffmpegBuilder.start();
+            int exitCode = ffmpegProcess.waitFor();
+            if (exitCode != 0) {
+                throw new RuntimeException("ffmpeg exited with code " + exitCode + ". Is ffmpeg installed and available on PATH?");
+            }
+
+            Files.move(tempOutput, Path.of(outputPath), StandardCopyOption.REPLACE_EXISTING);
+            return true;
+        } catch (IOException exception) {
+            if (exception.getMessage() != null && exception.getMessage().contains("Cannot run program \"ffmpeg\"")) {
+                return false;
+            }
+            throw new RuntimeException("Failed to write MP4 to " + outputPath + ". Is ffmpeg installed and available on PATH?", exception);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("MP4 generation interrupted.", exception);
+        } finally {
+            if (tempFramesDirectory != null) {
+                deleteDirectoryRecursively(tempFramesDirectory.toFile());
+            }
+        }
+    }
+
+    private static void deleteDirectoryRecursively(File directory) {
+        File[] files = directory.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    deleteDirectoryRecursively(file);
+                } else {
+                    file.delete();
+                }
+            }
+        }
+        directory.delete();
     }
 
     private static List<FluidEmitter> generateEdgeEmitters(FluidGrid grid, int emitterCount, Random random) {
@@ -154,5 +239,5 @@ public class Main {
         return Math.max(min, Math.min(max, value));
     }
 
-    private record SimulationConfig(int gridWidth, int gridHeight, int emitterCount) {}
+    private record SimulationConfig(int gridWidth, int gridHeight, int emitterCount, int simulationSteps) {}
 }
