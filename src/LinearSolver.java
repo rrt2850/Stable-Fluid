@@ -1,7 +1,9 @@
+import java.util.stream.IntStream;
+
 /**
- * Solves linear systems arising from diffusion and pressure projection
+ * Solves linear systems arising from diffusion and pressure projection.
  *
- * Uses an iterative Gauss–Seidel relaxation method
+ * Uses iterative relaxation to converge toward the solution.
  */
 public class LinearSolver {
     /**
@@ -10,9 +12,14 @@ public class LinearSolver {
     private final int iterationCount;
 
     /**
+     * Reused scratch buffer used by the Jacobi update.
+     */
+    private float[] scratchField;
+
+    /**
      * Constructs a linear solver with a fixed iteration count
      *
-     * @param iterationCount number of Gauss–Seidel iterations
+     * @param iterationCount number of relaxation iterations
      */
     public LinearSolver(int iterationCount) {
         if (iterationCount <= 0) {
@@ -31,28 +38,6 @@ public class LinearSolver {
     /**
      * Solves a linear equation of the form:
      *     x - a * Laplacian(x) = b
-     *
-     * Answers: Given what each cell had last frame, and how much it wants to
-     * spread out, what should each cell’s new value be so that everything distributes how it should
-     *
-     * aka My new value should be close to my old value, but also close to the average of my neighbors
-     *
-     * New value = ( old value + spread strength * (left + right + up + down) ) / normalization value
-     *
-     * spreadStrength = timeStep * diffusion * gridSize * gridSize (how much the neighbors influence each cell)
-     * normalizationValue = 1 + 4 * spreadStrength (aka total influence acting on the current cell)
-     *  - 1 = influence of the cell’s own previous value
-     *  - 4 = number of directions
-     *
-     *  resultField(row, col) =  (sourceField(row, col) + spreadStrength * neighbors) / c
-     *
-     * @param boundaryType  field type for boundary handling
-     * @param resultField  output array storing the solution (the values for the next frame)
-     * @param sourceField  input array containing the right-hand side (the values from the last frame)
-     * @param spreadStrength diffusion or viscosity coefficient (how much the neighbors influence each cell)
-     * @param normalizationValue normalization constant (how much total influence there is)
-     * @param grid         simulation grid
-     * @param boundaryHandler boundary condition handler
      */
     public void solve(BoundaryHandler.BoundaryType boundaryType,
                       float[] resultField,
@@ -61,31 +46,49 @@ public class LinearSolver {
                       float normalizationValue,
                       FluidGrid grid,
                       BoundaryHandler boundaryHandler) {
+        ensureScratchCapacity(resultField.length);
 
-        int index, leftIndex, rightIndex, upIndex, downIndex;
+        System.arraycopy(sourceField, 0, resultField, 0, sourceField.length);
+        float[] currentField = resultField;
+        float[] nextField = scratchField;
 
-        for(int iteration = 0; iteration < iterationCount; iteration++){
-            for(int yIndex = 1; yIndex <= grid.height; yIndex++){
-                for(int xIndex = 1; xIndex <= grid.width; xIndex++){
-                    index = grid.index(xIndex, yIndex);
+        for (int iteration = 0; iteration < iterationCount; iteration++) {
+            final float[] iterationCurrent = currentField;
+            final float[] iterationNext = nextField;
 
-                    leftIndex = grid.index(xIndex - 1, yIndex);
-                    rightIndex = grid.index(xIndex + 1, yIndex);
-                    upIndex = grid.index(xIndex, yIndex + 1);
-                    downIndex = grid.index(xIndex, yIndex - 1);
+            IntStream.rangeClosed(1, grid.height).parallel().forEach(yIndex -> {
+                for (int xIndex = 1; xIndex <= grid.width; xIndex++) {
+                    int index = grid.index(xIndex, yIndex);
 
-                    // Sum up the most recent surrounding fields (sourceField has the original values)
-                    float neighorSum = resultField[leftIndex] +
-                            resultField[rightIndex] +
-                            resultField[upIndex] +
-                            resultField[downIndex];
+                    int leftIndex = grid.index(xIndex - 1, yIndex);
+                    int rightIndex = grid.index(xIndex + 1, yIndex);
+                    int upIndex = grid.index(xIndex, yIndex + 1);
+                    int downIndex = grid.index(xIndex, yIndex - 1);
 
-                    resultField[index] = (sourceField[index] + spreadStrength * neighorSum) / normalizationValue;
+                    float neighborSum = iterationCurrent[leftIndex]
+                            + iterationCurrent[rightIndex]
+                            + iterationCurrent[upIndex]
+                            + iterationCurrent[downIndex];
+
+                    iterationNext[index] = (sourceField[index] + spreadStrength * neighborSum) / normalizationValue;
                 }
-            }
+            });
 
-            // Update the ghost cells using the new values
-            boundaryHandler.applyBoundaries(boundaryType, resultField, grid);
+            boundaryHandler.applyBoundaries(boundaryType, nextField, grid);
+
+            float[] temp = currentField;
+            currentField = nextField;
+            nextField = temp;
+        }
+
+        if (currentField != resultField) {
+            System.arraycopy(currentField, 0, resultField, 0, resultField.length);
+        }
+    }
+
+    private void ensureScratchCapacity(int minLength) {
+        if (scratchField == null || scratchField.length < minLength) {
+            scratchField = new float[minLength];
         }
     }
 }

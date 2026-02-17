@@ -21,22 +21,23 @@ public class Main {
     private static final int DEFAULT_SIMULATION_STEPS = 100;
     private static final int DEFAULT_EMITTER_COUNT = 12;
     private static final int MP4_FRAMES_PER_SECOND = 30;
+    private static final int INTERMITTENT_SNAPSHOT_INTERVAL = 50;
 
 
     // 12 namespace colors represented as RGB triplets in the [0, 1] range.
     private static final float[][] NAMESPACE_COLORS = {
-            {0.0f, 0.69f, 0.94f},  // azure
-            {0.0f, 0.78f, 0.58f},  // mint
-            {0.55f, 0.80f, 0.26f}, // lime
-            {0.98f, 0.82f, 0.20f}, // yellow
-            {1.0f, 0.63f, 0.0f},   // orange
-            {0.95f, 0.36f, 0.20f}, // vermillion
-            {0.87f, 0.22f, 0.52f}, // magenta
-            {0.67f, 0.27f, 0.87f}, // purple
-            {0.31f, 0.42f, 0.94f}, // indigo
-            {0.18f, 0.68f, 0.98f}, // sky
-            {0.0f, 0.73f, 0.75f},  // teal
-            {0.42f, 0.75f, 0.45f}  // green
+            {0.0f, 0.69f, 0.94f},
+            {0.0f, 0.78f, 0.58f},
+            {0.55f, 0.80f, 0.26f},
+            {0.98f, 0.82f, 0.20f},
+            {1.0f, 0.63f, 0.0f},
+            {0.95f, 0.36f, 0.20f},
+            {0.87f, 0.22f, 0.52f},
+            {0.67f, 0.27f, 0.87f},
+            {0.31f, 0.42f, 0.94f},
+            {0.18f, 0.68f, 0.98f},
+            {0.0f, 0.73f, 0.75f},
+            {0.42f, 0.75f, 0.45f}
     };
 
     public static void main(String[] args) {
@@ -70,38 +71,64 @@ public class Main {
             );
         }
 
-        List<BufferedImage> frames = config.exportVideo ? new ArrayList<>() : List.of();
-        for (int step = 1; step <= config.simulationSteps; step++) {
-            solver.step();
+        boolean takeIntermittentSnapshots = config.simulationSteps >= INTERMITTENT_SNAPSHOT_INTERVAL;
+        Path tempFramesDirectory = null;
+        try {
             if (config.exportVideo) {
-                frames.add(createDensityImage(grid, solver));
+                tempFramesDirectory = Files.createTempDirectory("stable-fluid-frames-");
             }
 
-            if (config.logEveryStep) {
-                System.out.println("Step " + step + " divergence RMS=" + solver.computeVelocityDivergenceRms());
+            for (int step = 1; step <= config.simulationSteps; step++) {
+                solver.step();
+
+                BufferedImage stepImage = null;
+                if (config.exportVideo || (takeIntermittentSnapshots && step % INTERMITTENT_SNAPSHOT_INTERVAL == 0)) {
+                    stepImage = createDensityImage(grid, solver);
+                }
+
+                if (config.exportVideo) {
+                    Path framePath = tempFramesDirectory.resolve(String.format("frame-%05d.png", step - 1));
+                    saveImage(stepImage, framePath.toString());
+                }
+
+                if (takeIntermittentSnapshots && step % INTERMITTENT_SNAPSHOT_INTERVAL == 0) {
+                    String intermittentPath = String.format("density-step-%05d.png", step);
+                    saveImage(stepImage, intermittentPath);
+                    System.out.println("Saved intermittent density image to " + intermittentPath);
+                }
+
+                if (config.logEveryStep) {
+                    System.out.println("Step " + step + " divergence RMS=" + solver.computeVelocityDivergenceRms());
+                }
             }
-        }
 
-        int center = grid.index((grid.width + 1) / 2, (grid.height + 1) / 2);
-        float centerDensity = solver.redDensityField.readValues[center]
-                + solver.greenDensityField.readValues[center]
-                + solver.blueDensityField.readValues[center];
-        System.out.println("Simulation ran. Center density=" + centerDensity);
+            int center = grid.index((grid.width + 1) / 2, (grid.height + 1) / 2);
+            float centerDensity = solver.redDensityField.readValues[center]
+                    + solver.greenDensityField.readValues[center]
+                    + solver.blueDensityField.readValues[center];
+            System.out.println("Simulation ran. Center density=" + centerDensity);
 
-        String outputPath = "density.png";
-        saveDensityToPng(grid, solver, outputPath);
-        System.out.println("Saved density image to " + outputPath);
+            String outputPath = "density.png";
+            saveDensityToPng(grid, solver, outputPath);
+            System.out.println("Saved density image to " + outputPath);
 
-        if (config.exportVideo) {
-            String videoOutputPath = "density-diffusion.mp4";
-            boolean mp4Exported = saveDensityToMp4(frames, videoOutputPath);
-            if (mp4Exported) {
-                System.out.println("Saved density animation to " + videoOutputPath);
+            if (config.exportVideo) {
+                String videoOutputPath = "density-diffusion.mp4";
+                boolean mp4Exported = saveDensityToMp4(tempFramesDirectory, videoOutputPath);
+                if (mp4Exported) {
+                    System.out.println("Saved density animation to " + videoOutputPath);
+                } else {
+                    System.out.println("Skipped MP4 export because ffmpeg is not available on PATH.");
+                }
             } else {
-                System.out.println("Skipped MP4 export because ffmpeg is not available on PATH.");
+                System.out.println("Skipped MP4 export. Pass a 5th argument of 'true' to enable video output.");
             }
-        } else {
-            System.out.println("Skipped MP4 export. Pass a 5th argument of 'true' to enable video output.");
+        } catch (IOException exception) {
+            throw new RuntimeException("Failed to create temporary frame directory.", exception);
+        } finally {
+            if (tempFramesDirectory != null) {
+                deleteDirectoryRecursively(tempFramesDirectory.toFile());
+            }
         }
 
         long programEndTime = System.nanoTime();
@@ -155,11 +182,14 @@ public class Main {
 
     private static void saveDensityToPng(FluidGrid grid, FluidSolver solver, String outputPath) {
         BufferedImage image = createDensityImage(grid, solver);
+        saveImage(image, outputPath);
+    }
 
+    private static void saveImage(BufferedImage image, String outputPath) {
         try {
             ImageIO.write(image, "png", new File(outputPath));
         } catch (IOException exception) {
-            throw new RuntimeException("Failed to write density PNG to " + outputPath, exception);
+            throw new RuntimeException("Failed to write PNG to " + outputPath, exception);
         }
     }
 
@@ -201,27 +231,18 @@ public class Main {
         return image;
     }
 
-    private static boolean saveDensityToMp4(List<BufferedImage> frames, String outputPath) {
-        if (frames.isEmpty()) {
-            throw new IllegalArgumentException("At least one frame is required to create an MP4.");
+    private static boolean saveDensityToMp4(Path framesDirectory, String outputPath) {
+        if (framesDirectory == null) {
+            throw new IllegalArgumentException("framesDirectory must not be null.");
         }
 
-        Path tempFramesDirectory = null;
-
         try {
-            tempFramesDirectory = Files.createTempDirectory("stable-fluid-frames-");
-
-            for (int i = 0; i < frames.size(); i++) {
-                Path framePath = tempFramesDirectory.resolve(String.format("frame-%05d.png", i));
-                ImageIO.write(frames.get(i), "png", framePath.toFile());
-            }
-
-            Path tempOutput = tempFramesDirectory.resolve("density-diffusion.mp4");
+            Path tempOutput = framesDirectory.resolve("density-diffusion.mp4");
             ProcessBuilder ffmpegBuilder = new ProcessBuilder(
                     "ffmpeg",
                     "-y",
                     "-framerate", String.valueOf(MP4_FRAMES_PER_SECOND),
-                    "-i", tempFramesDirectory.resolve("frame-%05d.png").toString(),
+                    "-i", framesDirectory.resolve("frame-%05d.png").toString(),
                     "-c:v", "libx264",
                     "-pix_fmt", "yuv420p",
                     tempOutput.toString()
@@ -243,10 +264,6 @@ public class Main {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new RuntimeException("MP4 generation interrupted.", exception);
-        } finally {
-            if (tempFramesDirectory != null) {
-                deleteDirectoryRecursively(tempFramesDirectory.toFile());
-            }
         }
     }
 

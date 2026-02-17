@@ -1,6 +1,7 @@
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.IntStream;
 
 /**
  * High-level controller that advances the fluid simulation forward in time.
@@ -145,7 +146,7 @@ public class FluidSolver {
     private void projectVelocity() {
         float invTwoCellSize = 0.5f / grid.cellSize;
 
-        for (int y = 1; y <= grid.height; y++) {
+        IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
             for (int x = 1; x <= grid.width; x++) {
                 int i = grid.index(x, y);
 
@@ -162,17 +163,17 @@ public class FluidSolver {
                 divergenceField.writeValues[i] = -invTwoCellSize * ((uRight - uLeft) + (vUp - vDown));
                 pressureField.writeValues[i] = 0.0f;
             }
-        }
+        });
 
         divergenceField.swapBuffers();
         pressureField.swapBuffers();
 
-        for (int y = 1; y <= grid.height; y++) {
+        IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
             for (int x = 1; x <= grid.width; x++) {
                 int i = grid.index(x, y);
                 divergenceField.writeValues[i] = divergenceField.readValues[i] * grid.cellSize * grid.cellSize;
             }
-        }
+        });
         boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.SCALAR, divergenceField.writeValues, grid);
 
         boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.SCALAR, pressureField.readValues, grid);
@@ -187,7 +188,7 @@ public class FluidSolver {
                 boundaryHandler
         );
 
-        for (int y = 1; y <= grid.height; y++) {
+        IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
             for (int x = 1; x <= grid.width; x++) {
                 int i = grid.index(x, y);
 
@@ -204,7 +205,7 @@ public class FluidSolver {
                 velocityField.readVelocityX[i] -= invTwoCellSize * (pRight - pLeft);
                 velocityField.readVelocityY[i] -= invTwoCellSize * (pUp - pDown);
             }
-        }
+        });
 
         boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.H_VELOCITY, velocityField.readVelocityX, grid);
         boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.V_VELOCITY, velocityField.readVelocityY, grid);
@@ -222,7 +223,7 @@ public class FluidSolver {
         float[] sourceVelocityX = velocityField.readVelocityX;
         float[] sourceVelocityY = velocityField.readVelocityY;
 
-        for (int gridY = 1; gridY <= grid.height; gridY++) {
+        IntStream.rangeClosed(1, grid.height).parallel().forEach(gridY -> {
             for (int gridX = 1; gridX <= grid.width; gridX++) {
 
                 int cellIndex = grid.index(gridX, gridY);
@@ -239,7 +240,7 @@ public class FluidSolver {
                 velocityField.writeVelocityY[cellIndex] =
                         bilinearSample(sourceVelocityY, sourceX, sourceY);
             }
-        }
+        });
 
         boundaryHandler.applyBoundaries(
                 BoundaryHandler.BoundaryType.H_VELOCITY,
@@ -286,7 +287,7 @@ public class FluidSolver {
 
         float[] sourceDensity = densityField.readValues;
 
-        for (int gridY = 1; gridY <= grid.height; gridY++) {
+        IntStream.rangeClosed(1, grid.height).parallel().forEach(gridY -> {
             for (int gridX = 1; gridX <= grid.width; gridX++) {
 
                 int cellIndex = grid.index(gridX, gridY);
@@ -299,7 +300,7 @@ public class FluidSolver {
 
                 densityField.writeValues[cellIndex] = bilinearSample(sourceDensity, sourceX, sourceY);
             }
-        }
+        });
 
         boundaryHandler.applyBoundaries(
                 BoundaryHandler.BoundaryType.SCALAR,
