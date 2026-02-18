@@ -12,6 +12,8 @@ public class FluidSolver {
     // External injectors
     private List<FluidSource> densitySources = new ArrayList<>();
     private List<FluidEmitter> emitters = new ArrayList<>();
+    private List<RadialFluidEmitter> radialEmitters = new ArrayList<>();
+    private List<Vortex> vortexes = new ArrayList<>();
 
     public final FluidGrid grid;
     public final SimulationParameters parameters;
@@ -32,6 +34,17 @@ public class FluidSolver {
             SimulationParameters parameters,
             List<FluidSource> densitySources,
             List<FluidEmitter> emitters
+    ) {
+        this(grid, parameters, densitySources, emitters, List.of(), List.of());
+    }
+
+    public FluidSolver(
+            FluidGrid grid,
+            SimulationParameters parameters,
+            List<FluidSource> densitySources,
+            List<FluidEmitter> emitters,
+            List<RadialFluidEmitter> radialEmitters,
+            List<Vortex> vortexes
     ) {
         this.grid = Objects.requireNonNull(grid, "grid must not be null");
         this.parameters = Objects.requireNonNull(parameters, "parameters must not be null");
@@ -56,6 +69,14 @@ public class FluidSolver {
                 ? new ArrayList<>(emitters)
                 : new ArrayList<>();
 
+        this.radialEmitters = (radialEmitters != null)
+                ? new ArrayList<>(radialEmitters)
+                : new ArrayList<>();
+
+        this.vortexes = (vortexes != null)
+                ? new ArrayList<>(vortexes)
+                : new ArrayList<>();
+
         for (FluidSource source : this.densitySources) {
             Objects.requireNonNull(source, "density source must not be null");
             validateInBounds(source.gridX, source.gridY, "density source");
@@ -63,6 +84,14 @@ public class FluidSolver {
         for (FluidEmitter emitter : this.emitters) {
             Objects.requireNonNull(emitter, "emitter must not be null");
             validateInBounds(emitter.gridX(), emitter.gridY(), "emitter");
+        }
+        for (RadialFluidEmitter radialEmitter : this.radialEmitters) {
+            Objects.requireNonNull(radialEmitter, "radial emitter must not be null");
+            validateInBounds(radialEmitter.gridX(), radialEmitter.gridY(), "radial emitter");
+        }
+        for (Vortex vortex : this.vortexes) {
+            Objects.requireNonNull(vortex, "vortex must not be null");
+            validateInBounds(vortex.gridX(), vortex.gridY(), "vortex");
         }
     }
 
@@ -105,6 +134,24 @@ public class FluidSolver {
             }
             emitter.applyDensity(redDensityField, greenDensityField, blueDensityField, grid, dt);
             emitter.applyVelocity(velocityField, grid);
+        }
+
+        for (RadialFluidEmitter radialEmitter : radialEmitters) {
+            if (!grid.inBounds(radialEmitter.gridX(), radialEmitter.gridY())) {
+                continue;
+            }
+            radialEmitter.applyDensity(redDensityField, greenDensityField, blueDensityField, grid, dt);
+            radialEmitter.applyVelocity(velocityField, grid);
+        }
+
+        for (Vortex vortex : vortexes) {
+            if (!grid.inBounds(vortex.gridX(), vortex.gridY())) {
+                continue;
+            }
+            vortex.applyVelocity(velocityField, grid, dt);
+            vortex.absorbDensity(redDensityField, grid, dt);
+            vortex.absorbDensity(greenDensityField, grid, dt);
+            vortex.absorbDensity(blueDensityField, grid, dt);
         }
     }
 
