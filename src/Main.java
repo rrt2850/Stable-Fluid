@@ -11,18 +11,18 @@ import java.util.List;
 import java.util.Random;
 
 public class Main {
-    private static final float DEFAULT_DENSITY_RATE = 5.0f;
-    private static final float MIN_EMISSION_SPEED = 0.12f;
-    private static final float MAX_EMISSION_SPEED = 0.28f;
-    private static final float TIMESTEP = 0.020f;
+    private static final float DEFAULT_DENSITY_RATE = 0.9f;
+    private static final float MIN_EMISSION_SPEED = 0.7f;
+    private static final float MAX_EMISSION_SPEED = 1.1f;
+    private static final float TIMESTEP = 0.010f;
     private static final float VISCOSITY = 0.00000001f;
-    private static final float DIFFUSION_RATE = 0.002f;
+    private static final float DIFFUSION_RATE = 0.007f;
     private static final int SOLVER_ITERATIONS = 25;
-    private static final float EMITTER_RADIUS_RATIO = 0.12f;
-    private static final int MIN_EMITTER_RADIUS = 20;
-    private static final int MAX_EMITTER_RADIUS = 160;
+    private static final float EMITTER_RADIUS_RATIO = 0.012f;
+    private static final int MIN_EMITTER_RADIUS = 8;
+    private static final int MAX_EMITTER_RADIUS = 60;
     private static final float EMITTER_ANGLE_VARIATION_DEGREES = 55.0f;
-    private static final float VORTICITY_CONFINEMENT = 4.0f;
+    private static final float VORTICITY_CONFINEMENT = 4.5f;
 
     private static final int DEFAULT_SIMULATION_STEPS = 100;
     private static final int DEFAULT_EMITTER_COUNT = 12;
