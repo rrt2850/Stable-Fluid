@@ -13,7 +13,7 @@ public class FluidSolver {
     private List<FluidSource> densitySources = new ArrayList<>();
     private List<FluidEmitter> emitters = new ArrayList<>();
     private List<RadialFluidEmitter> radialEmitters = new ArrayList<>();
-    private List<Vortex> vortices = new ArrayList<>();
+    private List<Vortex> vortexes = new ArrayList<>();
 
     public final FluidGrid grid;
     public final SimulationParameters parameters;
@@ -44,7 +44,7 @@ public class FluidSolver {
             List<FluidSource> densitySources,
             List<FluidEmitter> emitters,
             List<RadialFluidEmitter> radialEmitters,
-            List<Vortex> vortices
+            List<Vortex> vortexes
     ) {
         this.grid = Objects.requireNonNull(grid, "grid must not be null");
         this.parameters = Objects.requireNonNull(parameters, "parameters must not be null");
@@ -73,8 +73,8 @@ public class FluidSolver {
                 ? new ArrayList<>(radialEmitters)
                 : new ArrayList<>();
 
-        this.vortices = (vortices != null)
-                ? new ArrayList<>(vortices)
+        this.vortexes = (vortexes != null)
+                ? new ArrayList<>(vortexes)
                 : new ArrayList<>();
 
         for (FluidSource source : this.densitySources) {
@@ -89,7 +89,7 @@ public class FluidSolver {
             Objects.requireNonNull(radialEmitter, "radial emitter must not be null");
             validateInBounds(radialEmitter.gridX(), radialEmitter.gridY(), "radial emitter");
         }
-        for (Vortex vortex : this.vortices) {
+        for (Vortex vortex : this.vortexes) {
             Objects.requireNonNull(vortex, "vortex must not be null");
             validateInBounds(vortex.gridX(), vortex.gridY(), "vortex");
         }
@@ -144,7 +144,7 @@ public class FluidSolver {
             radialEmitter.applyVelocity(velocityField, grid);
         }
 
-        for (Vortex vortex : vortices) {
+        for (Vortex vortex : vortexes) {
             if (!grid.inBounds(vortex.gridX(), vortex.gridY())) {
                 continue;
             }

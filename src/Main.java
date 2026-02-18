@@ -68,7 +68,7 @@ public class Main {
                         1.0f
                 )
         );
-        List<Vortex> vortices = List.of(
+        List<Vortex> vortexes = List.of(
                 new Vortex(
                         (grid.width + 1) / 2,
                         (grid.height + 1) / 2,
@@ -78,7 +78,7 @@ public class Main {
                 )
         );
 
-        FluidSolver solver = new FluidSolver(grid, parameters, sources, emitters, radialEmitters, vortices);
+        FluidSolver solver = new FluidSolver(grid, parameters, sources, emitters, radialEmitters, vortexes);
 
         System.out.println("Generated " + emitters.size() + " edge emitters:");
         for (int i = 0; i < emitters.size(); i++) {
@@ -100,7 +100,7 @@ public class Main {
         }
 
         System.out.println("Configured " + radialEmitters.size() + " radial emitters and "
-                + vortices.size() + " vortices.");
+                + vortexes.size() + " vortex emitters.");
 
         boolean takeIntermittentSnapshots = config.simulationSteps >= INTERMITTENT_SNAPSHOT_INTERVAL;
         Path tempFramesDirectory = null;
