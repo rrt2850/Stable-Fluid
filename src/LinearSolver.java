@@ -36,8 +36,10 @@ public class LinearSolver {
     }
 
     /**
-     * Solves a linear equation of the form:
-     *     x - a * Laplacian(x) = b
+     * Iteratively solves a diffusion/projection linear system for one field.
+     *
+     * <p>In plain language: this method repeatedly averages each cell with neighbors
+     * until the field becomes consistent with the requested physical rule.</p>
      */
     public void solve(BoundaryHandler.BoundaryType boundaryType,
                       float[] resultField,
@@ -86,6 +88,7 @@ public class LinearSolver {
         }
     }
 
+    /** Ensures the reusable temporary array is large enough for the current grid. */
     private void ensureScratchCapacity(int minLength) {
         if (scratchField == null || scratchField.length < minLength) {
             scratchField = new float[minLength];

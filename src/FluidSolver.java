@@ -29,6 +29,9 @@ public class FluidSolver {
     public final LinearSolver linearSolver;
     public final BoundaryHandler boundaryHandler;
 
+    /**
+     * Convenience constructor when no radial emitters or vortexes are needed.
+     */
     public FluidSolver(
             FluidGrid grid,
             SimulationParameters parameters,
@@ -38,6 +41,12 @@ public class FluidSolver {
         this(grid, parameters, densitySources, emitters, List.of(), List.of());
     }
 
+    /**
+     * Builds a solver and validates that all injectors are inside the grid.
+     *
+     * <p>The solver owns the simulation fields and applies the Stable Fluids update
+     * sequence each time {@link #step()} is called.</p>
+     */
     public FluidSolver(
             FluidGrid grid,
             SimulationParameters parameters,
@@ -95,6 +104,12 @@ public class FluidSolver {
         }
     }
 
+    /**
+     * Advances the simulation by one time step.
+     *
+     * <p>The order is: add sources, diffuse/project velocity, advect velocity, apply
+     * swirl recovery, re-project, then diffuse/advect each color density channel.</p>
+     */
     public void step() {
         addSources();
 
@@ -114,6 +129,7 @@ public class FluidSolver {
         advectDensity(blueDensityField);
     }
 
+    /** Injects density and momentum from configured sources, emitters, and vortexes. */
     private void addSources() {
 
         float dt = parameters.getTimeStep();
@@ -155,6 +171,7 @@ public class FluidSolver {
         }
     }
 
+    /** Smooths velocity to model viscosity (thicker fluid spreads momentum faster). */
     private void diffuseVelocity() {
         float timeStep = parameters.getTimeStep();
         float viscosity = parameters.getViscosity();
@@ -185,6 +202,11 @@ public class FluidSolver {
         velocityField.swapBuffers();
     }
 
+    /**
+     * Enforces near-incompressibility by removing divergence from velocity.
+     *
+     * <p>Intuitively: make sure flow neither creates nor destroys volume in a cell.</p>
+     */
     private void projectVelocity() {
         float invTwoCellSize = 0.5f / grid.cellSize;
 
@@ -253,6 +275,9 @@ public class FluidSolver {
         boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.V_VELOCITY, velocityField.readVelocityY, grid);
     }
 
+    /**
+     * Moves velocity through the grid by tracing each cell backward along the flow.
+     */
     private void advectVelocity() {
 
         float timeStepSeconds = parameters.getTimeStep();
@@ -298,6 +323,9 @@ public class FluidSolver {
         velocityField.swapBuffers();
     }
 
+    /**
+     * Adds a small rotational boost to preserve visible swirls lost to numerical diffusion.
+     */
     private void applyVorticityConfinement() {
         float confinementStrength = parameters.getVorticityConfinement();
         if (confinementStrength <= 0.0f) {
@@ -357,6 +385,7 @@ public class FluidSolver {
         boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.V_VELOCITY, velocityField.readVelocityY, grid);
     }
 
+    /** Diffuses one density channel, softening sharp concentration gradients. */
     private void diffuseDensity(ScalarField densityField) {
         float timeStep = parameters.getTimeStep();
         float diffusionRate = parameters.getDiffusionRate();
@@ -377,6 +406,7 @@ public class FluidSolver {
         densityField.swapBuffers();
     }
 
+    /** Transports one density channel along the current velocity field. */
     private void advectDensity(ScalarField densityField) {
 
         float timeStepSeconds = parameters.getTimeStep();
@@ -413,12 +443,16 @@ public class FluidSolver {
     }
 
 
+    /** Clamps a value to [min, max]. */
     private static float clamp(float value, float min, float max) {
         if (value < min) return min;
         if (value > max) return max;
         return value;
     }
 
+    /**
+     * Samples a grid field at a non-integer location using bilinear interpolation.
+     */
     private float bilinearSample(float[] field, float sampleX, float sampleY) {
         int x0 = (int) sampleX;
         int y0 = (int) sampleY;
@@ -445,18 +479,21 @@ public class FluidSolver {
         return lerpX0 + sy * (lerpX1 - lerpX0);
     }
 
+    /** Registers an additional point density source during runtime. */
     public void addDensitySource(FluidSource source) {
         Objects.requireNonNull(source, "density source must not be null");
         validateInBounds(source.gridX, source.gridY, "density source");
         densitySources.add(source);
     }
 
+    /** Registers an additional directional emitter during runtime. */
     public void addEmitter(FluidEmitter emitter) {
         Objects.requireNonNull(emitter, "emitter must not be null");
         validateInBounds(emitter.gridX(), emitter.gridY(), "emitter");
         emitters.add(emitter);
     }
 
+    /** Throws if a user-provided object sits outside the active simulation area. */
     private void validateInBounds(int gridX, int gridY, String objectType) {
         if (!grid.inBounds(gridX, gridY)) {
             throw new IllegalArgumentException(objectType + " out of bounds: (" + gridX + ", " + gridY + ")");

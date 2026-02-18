@@ -6,6 +6,9 @@
  */
 public class BoundaryHandler {
 
+    /**
+     * Identifies what a field physically represents so edges can be treated correctly.
+     */
     public enum BoundaryType{
         SCALAR,
         H_VELOCITY,
