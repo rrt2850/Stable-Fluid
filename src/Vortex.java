@@ -6,8 +6,10 @@
  * @param radius            Radius of influence.
  * @param suctionStrength   Inward pull magnitude applied to velocity.
  * @param absorptionRate    Density removed per second near the center.
+ * @param swirlStrength     Tangential spin strength for whirlpool-like circular flow.
  */
-public record Vortex(int gridX, int gridY, int radius, float suctionStrength, float absorptionRate) {
+public record Vortex(int gridX, int gridY, int radius, float suctionStrength, float absorptionRate,
+                     float swirlStrength) {
 
     private static final int MIN_RADIUS = 1;
 
@@ -38,11 +40,17 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
 
                 float directionToCenterX = -dx / distance;
                 float directionToCenterY = -dy / distance;
+
+                // Tangential vector for clockwise rotation: perpendicular to radial direction.
+                float tangentX = dy / distance;
+                float tangentY = -dx / distance;
+
                 float pullStrength = suctionStrength * weight * timeStepSeconds;
+                float spinStrength = swirlStrength * weight * timeStepSeconds;
 
                 int index = grid.index(x, y);
-                velocity.readVelocityX[index] += directionToCenterX * pullStrength;
-                velocity.readVelocityY[index] += directionToCenterY * pullStrength;
+                velocity.readVelocityX[index] += directionToCenterX * pullStrength + tangentX * spinStrength;
+                velocity.readVelocityY[index] += directionToCenterY * pullStrength + tangentY * spinStrength;
             }
         }
     }

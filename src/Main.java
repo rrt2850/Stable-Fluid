@@ -74,7 +74,8 @@ public class Main {
                         (grid.height + 1) / 2,
                         14,
                         1.4f,
-                        1.5f
+                        1.5f,
+                        2.2f
                 )
         );
 
