@@ -11,22 +11,23 @@ import java.util.List;
 import java.util.Random;
 
 public class Main {
-    private static final float DEFAULT_DENSITY_RATE = 15.0f;
-    private static final float MIN_EMISSION_SPEED = 0.5f;
-    private static final float MAX_EMISSION_SPEED = 0.75f;
-    private static final float TIMESTEP = 0.020f;
-    private static final float VISCOSITY = 0.00001f;
-    private static final float DIFFUSION_RATE = 0.0001f;
-    private static final int SOLVER_ITERATIONS = 25;
-    private static final int EMITTER_RADIUS = 20; // Explodes around 35
-    private static final float EMITTER_ANGLE_VARIATION_DEGREES = 30.0f;
-    private static final float VORTICITY_CONFINEMENT = 2.1f;
+    private static final float DEFAULT_DENSITY_RATE = 12.0f;   // was 15.0
+    private static final float MIN_EMISSION_SPEED = 0.35f;     // was 0.5
+    private static final float MAX_EMISSION_SPEED = 0.55f;     // was 0.75
+    private static final float TIMESTEP = 0.03f;              // was 0.020
+    private static final float VISCOSITY = 0.00003f;           // was 0.00001
+    private static final float DIFFUSION_RATE = 0.0010f;      // was 0.0001
+    private static final int SOLVER_ITERATIONS = 30;           // was 25
+    private static final int EMITTER_RADIUS = 30;              // was 20 (comment warns ~35 explodes)
+    private static final float EMITTER_ANGLE_VARIATION_DEGREES = 25.0f; // was 30
+    private static final float VORTICITY_CONFINEMENT = 4.0f;   // was 2.1
+
 
     private static final int DEFAULT_SIMULATION_STEPS = 100;
     private static final int DEFAULT_EMITTER_COUNT = 12;
     private static final int MP4_FRAMES_PER_SECOND = 30;
     private static final int INTERMITTENT_SNAPSHOT_INTERVAL = 25;
-    private static final int RANDOM_SEED = 67; // TODO: switch to time-based seed after testing
+    private static final long RANDOM_SEED = System.currentTimeMillis(); // TODO: switch to time-based seed after testing
 
 
     // 12 namespace colors represented as RGB triplets in the [0, 1] range.
@@ -57,30 +58,40 @@ public class Main {
         Random random = new Random(RANDOM_SEED);
         List<FluidEmitter> emitters = generateEdgeEmitters(grid, config.emitterCount, random);
         List<RadialFluidEmitter> radialEmitters = List.of(
+                /*
                 new RadialFluidEmitter(
                         (grid.width + 1) / 2,
                         (grid.height + 1) / 2,
                         10,
                         4.0f,
-                        0.2f,
-                        1.0f,
-                        1.0f,
-                        1.0f
-                )
+                        0.08f,
+                        0.9f,
+                        0.3f,
+                        0.9f
+                )*/
         );
         List<Vortex> vortexes = List.of(
                 new Vortex(
-                        (grid.width + 1) / 2,
+                        (grid.width + 1) / 4,
                         (grid.height + 1) / 2,
-                        14,
-                        1.4f,
-                        1.5f,
-                        2.2f
+                        200,
+                        4000.0f,
+                        20.0f,
+                        1000f
+                ),
+                new Vortex(
+                        ((grid.width + 1) / 4) * 3,
+                        (grid.height + 1) / 2,
+                        200,
+                        4000.0f,
+                        20.0f,
+                        1000f
                 )
         );
 
         FluidSolver solver = new FluidSolver(grid, parameters, sources, emitters, radialEmitters, vortexes);
 
+        System.out.println("Seed: " + RANDOM_SEED);
         System.out.println("Generated " + emitters.size() + " edge emitters:");
         for (int i = 0; i < emitters.size(); i++) {
             FluidEmitter emitter = emitters.get(i);
@@ -99,6 +110,7 @@ public class Main {
                     blue
             );
         }
+
 
         System.out.println("Configured " + radialEmitters.size() + " radial emitters and "
                 + vortexes.size() + " vortex emitters.");
