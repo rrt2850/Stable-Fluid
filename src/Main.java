@@ -10,6 +10,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+/**
+ * Entry point for the fluid simulation demo application.
+ *
+ * <p>This class wires together simulation setup, per-step execution, and export helpers
+ * for image/video output. Most methods are intentionally small utility methods so readers
+ * can follow the pipeline from command-line arguments to rendered output.</p>
+ */
 public class Main {
     private static final float DEFAULT_DENSITY_RATE = 0.9f;
     private static final float MIN_EMISSION_SPEED = 0.7f;
@@ -57,6 +64,12 @@ public class Main {
             {0.42f, 0.75f, 0.45f}
     };
 
+    /**
+     * Starts a simulation run and optionally exports frames and MP4 output.
+     *
+     * @param args optional command-line overrides for grid size, emitter count,
+     *             step count, video export flag, and logging flag
+     */
     public static void main(String[] args) {
         long programStartTime = System.nanoTime();
         SimulationConfig config = parseConfig(args);
@@ -195,7 +208,6 @@ public class Main {
                 }
             }
 
-
             int center = grid.index((grid.width + 1) / 2, (grid.height + 1) / 2);
             float centerDensity = solver.redDensityField.readValues[center]
                     + solver.greenDensityField.readValues[center]
@@ -231,6 +243,12 @@ public class Main {
         System.out.printf("Total runtime: %.3f seconds%n", elapsedSeconds);
     }
 
+    /**
+     * Parses command-line arguments with sensible defaults.
+     *
+     * @param args raw command-line arguments
+     * @return immutable simulation configuration used by {@link #main(String[])}
+     */
     private static SimulationConfig parseConfig(String[] args) {
         // Defaults match your PowerShell runner, but you can still override via args.
         int gridWidth = parsePositiveInt(args, 0, DEFAULT_GRID_WIDTH, "grid width");
@@ -243,6 +261,9 @@ public class Main {
         return new SimulationConfig(gridWidth, gridHeight, emitterCount, simulationSteps, exportVideo, logEveryStep);
     }
 
+    /**
+     * Parses a positive integer from a given argument slot.
+     */
     private static int parsePositiveInt(String[] args, int index, int defaultValue, String argumentName) {
         if (args.length <= index) {
             return defaultValue;
@@ -259,6 +280,9 @@ public class Main {
         }
     }
 
+    /**
+     * Parses a strict boolean value ("true" or "false") from arguments.
+     */
     private static boolean parseBoolean(String[] args, int index, boolean defaultValue, String argumentName) {
         if (args.length <= index) {
             return defaultValue;
@@ -276,12 +300,18 @@ public class Main {
         throw new IllegalArgumentException(argumentName + " must be either 'true' or 'false'.");
     }
 
+    /**
+     * Renders the final high-resolution density image and writes it as a PNG file.
+     */
     private static void saveDensityToPng(FluidGrid grid, FluidSolver solver, String outputPath) {
         // Upscaled final still
         BufferedImage image = createDensityImage(grid, solver, FINAL_STILL_WIDTH, FINAL_STILL_HEIGHT);
         saveImage(image, outputPath);
     }
 
+    /**
+     * Writes a BufferedImage to disk as PNG.
+     */
     private static void saveImage(BufferedImage image, String outputPath) {
         try {
             ImageIO.write(image, "png", new File(outputPath));
@@ -290,6 +320,12 @@ public class Main {
         }
     }
 
+    /**
+     * Converts simulation density fields into an RGB image using bilinear upsampling.
+     *
+     * <p>Each color channel is normalized independently so faint channels remain visible
+     * even when another channel is very bright.</p>
+     */
     private static BufferedImage createDensityImage(
             FluidGrid grid,
             FluidSolver solver,
@@ -302,7 +338,7 @@ public class Main {
         float[] green = solver.greenDensityField.readValues;
         float[] blue = solver.blueDensityField.readValues;
 
-        // Keep your stable per-channel normalization (prevents blowouts)
+        // Normalize each channel by its own max value to avoid washing out weaker colors.
         float maxRedDensity = 0.0f;
         float maxGreenDensity = 0.0f;
         float maxBlueDensity = 0.0f;
@@ -341,6 +377,9 @@ public class Main {
         return image;
     }
 
+    /**
+     * Samples a scalar field at a non-integer grid position using bilinear interpolation.
+     */
     private static float bilinearSample(FluidGrid grid, float[] values, float x, float y) {
         float clampedX = clamp(x, 1.0f, grid.width);
         float clampedY = clamp(y, 1.0f, grid.height);
@@ -363,6 +402,11 @@ public class Main {
         return top + ty * (bottom - top);
     }
 
+    /**
+     * Encodes numbered PNG frames into an MP4 using ffmpeg.
+     *
+     * @return true if export succeeded, false when ffmpeg is not installed
+     */
     private static boolean saveDensityToMp4(Path framesDirectory, String outputPath) {
         if (framesDirectory == null) {
             throw new IllegalArgumentException("framesDirectory must not be null.");
@@ -399,6 +443,9 @@ public class Main {
         }
     }
 
+    /**
+     * Recursively deletes a directory and everything inside it.
+     */
     private static void deleteDirectoryRecursively(File directory) {
         File[] files = directory.listFiles();
         if (files != null) {
@@ -413,6 +460,9 @@ public class Main {
         directory.delete();
     }
 
+    /**
+     * Places emitters near the four edges and points them roughly toward the center.
+     */
     private static List<FluidEmitter> generateEdgeEmitters(FluidGrid grid, int emitterCount, Random random) {
         List<FluidEmitter> emitters = new ArrayList<>();
         float centerX = (grid.width + 1) / 2.0f;
@@ -469,19 +519,31 @@ public class Main {
         return emitters;
     }
 
+    /**
+     * Returns a uniformly distributed random float between min and max.
+     */
     private static float randomRange(Random random, float min, float max) {
         return min + random.nextFloat() * (max - min);
     }
 
+    /**
+     * Computes emitter radius from grid size while keeping a practical min/max cap.
+     */
     private static int computeEmitterRadius(FluidGrid grid) {
         int radiusFromRatio = Math.round(Math.min(grid.width, grid.height) * EMITTER_RADIUS_RATIO);
         return Math.min(MAX_EMITTER_RADIUS, Math.max(MIN_EMITTER_RADIUS, radiusFromRatio));
     }
 
+    /**
+     * Restricts a value to the closed interval [min, max].
+     */
     private static float clamp(float value, float min, float max) {
         return Math.max(min, Math.min(max, value));
     }
 
+    /**
+     * Immutable command-line configuration for one simulation run.
+     */
     private record SimulationConfig(
             int gridWidth,
             int gridHeight,

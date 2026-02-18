@@ -17,7 +17,9 @@
 public record FluidEmitter(int gridX, int gridY, int radius, float densityRate, float angleDegrees, float emissionSpeed,
                            float red, float green, float blue) {
 
+    /** Safety floor so math never divides by zero radius. */
     private static final int MIN_RADIUS = 1;
+    /** Controls how much wider emitters reduce per-cell push strength. */
     private static final float VELOCITY_RADIUS_FALLOFF_EXPONENT = 0.5f;
 
     /**

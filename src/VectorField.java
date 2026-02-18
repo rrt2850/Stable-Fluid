@@ -13,6 +13,11 @@ public class VectorField {
     public float[] writeVelocityX;
     public float[] writeVelocityY;
 
+    /**
+     * Creates a velocity field with separate read/write buffers for X and Y velocity.
+     *
+     * @param totalCellCount number of active + ghost cells in the grid
+     */
     public VectorField(int totalCellCount) {
         readVelocityX = new float[totalCellCount];
         readVelocityY = new float[totalCellCount];
@@ -20,6 +25,9 @@ public class VectorField {
         writeVelocityY = new float[totalCellCount];
     }
 
+    /**
+     * Clears both velocity components in both buffers.
+     */
     public void clear() {
         Arrays.fill(readVelocityX, 0f);
         Arrays.fill(readVelocityY, 0f);
@@ -27,6 +35,9 @@ public class VectorField {
         Arrays.fill(writeVelocityY, 0f);
     }
 
+    /**
+     * Swaps read/write buffers for both velocity components.
+     */
     public void swapBuffers() {
         float[] tempX = readVelocityX;
         readVelocityX = writeVelocityX;

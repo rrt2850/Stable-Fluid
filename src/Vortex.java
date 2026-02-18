@@ -13,6 +13,9 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
 
     private static final int MIN_RADIUS = 1;
 
+    /**
+     * Pulls velocity inward while adding sideways spin to create a whirlpool effect.
+     */
     public void applyVelocity(VectorField velocity, FluidGrid grid, float timeStepSeconds) {
         if (!grid.inBounds(gridX, gridY)) {
             throw new IllegalArgumentException("vortex out of bounds: (" + gridX + ", " + gridY + ")");
@@ -55,6 +58,9 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
         }
     }
 
+    /**
+     * Removes density near the vortex center so material appears to be swallowed.
+     */
     public void absorbDensity(ScalarField densityField, FluidGrid grid, float timeStepSeconds) {
         if (!grid.inBounds(gridX, gridY)) {
             throw new IllegalArgumentException("vortex out of bounds: (" + gridX + ", " + gridY + ")");

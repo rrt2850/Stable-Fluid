@@ -15,6 +15,9 @@ public record RadialFluidEmitter(int gridX, int gridY, int radius, float density
 
     private static final int MIN_RADIUS = 1;
 
+    /**
+     * Pushes nearby velocity outward from the emitter center in all directions.
+     */
     public void applyVelocity(VectorField velocity, FluidGrid grid) {
         if (!grid.inBounds(gridX, gridY)) {
             throw new IllegalArgumentException("radial emitter out of bounds: (" + gridX + ", " + gridY + ")");
@@ -49,6 +52,9 @@ public record RadialFluidEmitter(int gridX, int gridY, int radius, float density
         }
     }
 
+    /**
+     * Adds colored density around the center with a smooth falloff toward the edge.
+     */
     public void applyDensity(ScalarField redDensityField, ScalarField greenDensityField, ScalarField blueDensityField,
                              FluidGrid grid, float timeStepSeconds) {
         if (!grid.inBounds(gridX, gridY)) {
