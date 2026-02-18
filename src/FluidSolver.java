@@ -176,7 +176,11 @@ public class FluidSolver {
         float timeStep = parameters.getTimeStep();
         float viscosity = parameters.getViscosity();
 
+        // Stable Fluids diffusion constant:
+        // spreadStrength = (secondsPerStep * fluidViscosity) / (cellWidth^2)
+        // Larger values make momentum blur across neighbors more each step.
         float spreadStrength = timeStep * viscosity / (grid.cellSize * grid.cellSize);
+        // Each Jacobi update divides by (centerWeight + 4 neighbor weights).
         float normalizationValue = 1.0f + 4.0f * spreadStrength;
 
         linearSolver.solve(
@@ -206,6 +210,15 @@ public class FluidSolver {
      * Enforces near-incompressibility by removing divergence from velocity.
      *
      * <p>Intuitively: make sure flow neither creates nor destroys volume in a cell.</p>
+     *
+     * <p>Math in plain names:</p>
+     * <ul>
+     *   <li><b>velocityDivergence</b> = -0.5/cellWidth * ((rightVelocityX - leftVelocityX)
+     *       + (topVelocityY - bottomVelocityY))</li>
+     *   <li>Solve Poisson equation for <b>pressure</b> so pressure gradients cancel divergence.</li>
+     *   <li>Correct velocity with pressure gradient:
+     *       correctedVelocityX = velocityX - 0.5/cellWidth * (pressureRight - pressureLeft)</li>
+     * </ul>
      */
     private void projectVelocity() {
         float invTwoCellSize = 0.5f / grid.cellSize;
@@ -219,11 +232,13 @@ public class FluidSolver {
                 int down = grid.index(x, y - 1);
                 int up = grid.index(x, y + 1);
 
+                // Sample neighboring velocity components around this cell center.
                 float uRight = velocityField.readVelocityX[right];
                 float uLeft = velocityField.readVelocityX[left];
                 float vUp = velocityField.readVelocityY[up];
                 float vDown = velocityField.readVelocityY[down];
 
+                // Divergence tells us whether the cell acts like a source/sink of volume.
                 divergenceField.writeValues[i] = -invTwoCellSize * ((uRight - uLeft) + (vUp - vDown));
                 pressureField.writeValues[i] = 0.0f;
             }
@@ -235,6 +250,7 @@ public class FluidSolver {
         IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
             for (int x = 1; x <= grid.width; x++) {
                 int i = grid.index(x, y);
+                // Scale RHS by cellWidth^2 to match the discrete Poisson form used by linearSolver.
                 divergenceField.writeValues[i] = divergenceField.readValues[i] * grid.cellSize * grid.cellSize;
             }
         });
@@ -266,6 +282,7 @@ public class FluidSolver {
                 float pUp = pressureField.readValues[up];
                 float pDown = pressureField.readValues[down];
 
+                // Subtract pressure gradient so the final flow is approximately divergence-free.
                 velocityField.readVelocityX[i] -= invTwoCellSize * (pRight - pLeft);
                 velocityField.readVelocityY[i] -= invTwoCellSize * (pUp - pDown);
             }
@@ -277,6 +294,10 @@ public class FluidSolver {
 
     /**
      * Moves velocity through the grid by tracing each cell backward along the flow.
+     *
+     * <p>Backtrace equation with descriptive names:</p>
+     * <p><b>sourcePosition</b> = <b>cellCenterPosition</b> - (secondsPerStep / cellWidth) * <b>cellVelocity</b></p>
+     * <p>We then bilinearly sample velocity at that sourcePosition.</p>
      */
     private void advectVelocity() {
 
@@ -295,6 +316,7 @@ public class FluidSolver {
 
                 int cellIndex = grid.index(gridX, gridY);
 
+                // Semi-Lagrangian step: trace backwards to where this parcel came from last frame.
                 float sourceX = gridX - velocityToGridCells * currentVelocityX[cellIndex];
                 float sourceY = gridY - velocityToGridCells * currentVelocityY[cellIndex];
 
@@ -325,6 +347,13 @@ public class FluidSolver {
 
     /**
      * Adds a small rotational boost to preserve visible swirls lost to numerical diffusion.
+     *
+     * <p>Plain-language variable mapping:</p>
+     * <ul>
+     *   <li><b>vorticity</b> = d(velocityY)/dx - d(velocityX)/dy (local spin amount)</li>
+     *   <li><b>curlMagnitudeGradient</b> points toward stronger spinning regions</li>
+     *   <li>Confinement force is perpendicular to that gradient and scaled by spin</li>
+     * </ul>
      */
     private void applyVorticityConfinement() {
         float confinementStrength = parameters.getVorticityConfinement();
@@ -345,6 +374,7 @@ public class FluidSolver {
                 int down = grid.index(x, y - 1);
                 int up = grid.index(x, y + 1);
 
+                // Estimate partial derivatives with centered differences.
                 float dVxDy = (velocityField.readVelocityX[up] - velocityField.readVelocityX[down]) * invTwoCellSize;
                 float dVyDx = (velocityField.readVelocityY[right] - velocityField.readVelocityY[left]) * invTwoCellSize;
 
@@ -365,6 +395,7 @@ public class FluidSolver {
                 float dVyDx = (velocityField.readVelocityY[right] - velocityField.readVelocityY[left]) * invTwoCellSize;
                 float vorticity = dVyDx - dVxDy;
 
+                // Gradient of |curl| tells us where swirling is strongest nearby.
                 float gradX = (curlMagnitude[right] - curlMagnitude[left]) * invTwoCellSize;
                 float gradY = (curlMagnitude[up] - curlMagnitude[down]) * invTwoCellSize;
 
@@ -373,6 +404,7 @@ public class FluidSolver {
                 float normalY = gradY / gradLength;
 
                 float forceScale = confinementStrength * grid.cellSize;
+                // Rotate the normalized gradient by 90 degrees to get a tangential force direction.
                 float forceX = forceScale * normalY * vorticity;
                 float forceY = -forceScale * normalX * vorticity;
 
@@ -406,7 +438,13 @@ public class FluidSolver {
         densityField.swapBuffers();
     }
 
-    /** Transports one density channel along the current velocity field. */
+    /**
+     * Transports one density channel along the current velocity field.
+     *
+     * <p>Same backtrace rule as velocity advection:</p>
+     * <p><b>sourceCell</b> = <b>currentCell</b> - scaledVelocity, where
+     * scaledVelocity = (secondsPerStep / cellWidth) * velocityInWorldUnits.</p>
+     */
     private void advectDensity(ScalarField densityField) {
 
         float timeStepSeconds = parameters.getTimeStep();
@@ -423,6 +461,7 @@ public class FluidSolver {
 
                 int cellIndex = grid.index(gridX, gridY);
 
+                // Trace this density sample backward through the velocity field.
                 float sourceX = gridX - velocityToGridCells * velocityX[cellIndex];
                 float sourceY = gridY - velocityToGridCells * velocityY[cellIndex];
 
@@ -452,6 +491,10 @@ public class FluidSolver {
 
     /**
      * Samples a grid field at a non-integer location using bilinear interpolation.
+     *
+     * <p>Readable formula:</p>
+     * <p>interpolatedValue = lerpY( lerpX(bottomLeft, bottomRight),
+     * lerpX(topLeft, topRight) ) using fractional offsets inside the cell.</p>
      */
     private float bilinearSample(float[] field, float sampleX, float sampleY) {
         int x0 = (int) sampleX;

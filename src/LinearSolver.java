@@ -40,6 +40,17 @@ public class LinearSolver {
      *
      * <p>In plain language: this method repeatedly averages each cell with neighbors
      * until the field becomes consistent with the requested physical rule.</p>
+     *
+     * <p>Jacobi update written with descriptive names:</p>
+     * <p><b>nextCellValue</b> =
+     * (originalSourceValue + neighborInfluenceStrength * (leftNeighbor + rightNeighbor + topNeighbor + bottomNeighbor))
+     * / diagonalNormalization.</p>
+     *
+     * <p>Where:</p>
+     * <ul>
+     *   <li><b>neighborInfluenceStrength</b> is {@code spreadStrength}</li>
+     *   <li><b>diagonalNormalization</b> is {@code normalizationValue}</li>
+     * </ul>
      */
     public void solve(BoundaryHandler.BoundaryType boundaryType,
                       float[] resultField,
@@ -67,15 +78,18 @@ public class LinearSolver {
                     int upIndex = grid.index(xIndex, yIndex + 1);
                     int downIndex = grid.index(xIndex, yIndex - 1);
 
+                    // Add the 4-connected neighbor values used by the stencil.
                     float neighborSum = iterationCurrent[leftIndex]
                             + iterationCurrent[rightIndex]
                             + iterationCurrent[upIndex]
                             + iterationCurrent[downIndex];
 
+                    // One Jacobi relaxation update for this cell.
                     iterationNext[index] = (sourceField[index] + spreadStrength * neighborSum) / normalizationValue;
                 }
             });
 
+            // Keep ghost cells valid after each iteration so the next stencil read is correct at edges.
             boundaryHandler.applyBoundaries(boundaryType, nextField, grid);
 
             float[] temp = currentField;
