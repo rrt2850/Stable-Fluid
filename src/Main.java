@@ -11,16 +11,18 @@ import java.util.List;
 import java.util.Random;
 
 public class Main {
-    private static final float DEFAULT_DENSITY_RATE = 15.0f;
-    private static final float MIN_EMISSION_SPEED = 0.5f;
-    private static final float MAX_EMISSION_SPEED = 0.75f;
+    private static final float DEFAULT_DENSITY_RATE = 18.0f;
+    private static final float MIN_EMISSION_SPEED = 0.12f;
+    private static final float MAX_EMISSION_SPEED = 0.28f;
     private static final float TIMESTEP = 0.020f;
     private static final float VISCOSITY = 0.00001f;
-    private static final float DIFFUSION_RATE = 0.0001f;
+    private static final float DIFFUSION_RATE = 0.00002f;
     private static final int SOLVER_ITERATIONS = 25;
-    private static final int EMITTER_RADIUS = 20; // Explodes around 35
-    private static final float EMITTER_ANGLE_VARIATION_DEGREES = 30.0f;
-    private static final float VORTICITY_CONFINEMENT = 2.1f;
+    private static final float EMITTER_RADIUS_RATIO = 0.12f;
+    private static final int MIN_EMITTER_RADIUS = 20;
+    private static final int MAX_EMITTER_RADIUS = 160;
+    private static final float EMITTER_ANGLE_VARIATION_DEGREES = 55.0f;
+    private static final float VORTICITY_CONFINEMENT = 3.0f;
 
     private static final int DEFAULT_SIMULATION_STEPS = 100;
     private static final int DEFAULT_EMITTER_COUNT = 12;
@@ -318,13 +320,14 @@ public class Main {
         List<FluidEmitter> emitters = new ArrayList<>();
         float centerX = (grid.width + 1) / 2.0f;
         float centerY = (grid.height + 1) / 2.0f;
+        int emitterRadius = computeEmitterRadius(grid);
 
         while (emitters.size() < emitterCount) {
             int side = random.nextInt(4);
             int x;
             int y;
 
-            int offset = EMITTER_RADIUS;
+            int offset = Math.max(1, emitterRadius / 2);
 
             if (side == 0) { // top
                 x = 1 + random.nextInt(grid.width);
@@ -357,7 +360,7 @@ public class Main {
             emitters.add(new FluidEmitter(
                     x,
                     y,
-                    EMITTER_RADIUS,
+                    emitterRadius,
                     DEFAULT_DENSITY_RATE,
                     candidateAngle,
                     emissionSpeed,
@@ -372,6 +375,11 @@ public class Main {
 
     private static float randomRange(Random random, float min, float max) {
         return min + random.nextFloat() * (max - min);
+    }
+
+    private static int computeEmitterRadius(FluidGrid grid) {
+        int radiusFromRatio = Math.round(Math.min(grid.width, grid.height) * EMITTER_RADIUS_RATIO);
+        return Math.min(MAX_EMITTER_RADIUS, Math.max(MIN_EMITTER_RADIUS, radiusFromRatio));
     }
 
     private static float clamp(float value, float min, float max) {
