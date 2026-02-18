@@ -56,9 +56,29 @@ public class Main {
 
         Random random = new Random(RANDOM_SEED);
         List<FluidEmitter> emitters = generateEdgeEmitters(grid, config.emitterCount, random);
+        List<RadialFluidEmitter> radialEmitters = List.of(
+                new RadialFluidEmitter(
+                        (grid.width + 1) / 2,
+                        (grid.height + 1) / 2,
+                        10,
+                        4.0f,
+                        0.2f,
+                        1.0f,
+                        1.0f,
+                        1.0f
+                )
+        );
+        List<Vortex> vortices = List.of(
+                new Vortex(
+                        (grid.width + 1) / 2,
+                        (grid.height + 1) / 2,
+                        14,
+                        1.4f,
+                        1.5f
+                )
+        );
 
-
-        FluidSolver solver = new FluidSolver(grid, parameters, sources, emitters);
+        FluidSolver solver = new FluidSolver(grid, parameters, sources, emitters, radialEmitters, vortices);
 
         System.out.println("Generated " + emitters.size() + " edge emitters:");
         for (int i = 0; i < emitters.size(); i++) {
@@ -78,6 +98,9 @@ public class Main {
                     blue
             );
         }
+
+        System.out.println("Configured " + radialEmitters.size() + " radial emitters and "
+                + vortices.size() + " vortices.");
 
         boolean takeIntermittentSnapshots = config.simulationSteps >= INTERMITTENT_SNAPSHOT_INTERVAL;
         Path tempFramesDirectory = null;
