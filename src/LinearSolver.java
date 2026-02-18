@@ -1,5 +1,3 @@
-import java.util.stream.IntStream;
-
 /**
  * Solves linear systems arising from diffusion and pressure projection.
  *
@@ -51,28 +49,33 @@ public class LinearSolver {
         System.arraycopy(sourceField, 0, resultField, 0, sourceField.length);
         float[] currentField = resultField;
         float[] nextField = scratchField;
+        int stride = grid.width + 2;
+        int width = grid.width;
+        int height = grid.height;
+        float invNormalizationValue = 1.0f / normalizationValue;
 
         for (int iteration = 0; iteration < iterationCount; iteration++) {
             final float[] iterationCurrent = currentField;
             final float[] iterationNext = nextField;
 
-            IntStream.rangeClosed(1, grid.height).parallel().forEach(yIndex -> {
-                for (int xIndex = 1; xIndex <= grid.width; xIndex++) {
-                    int index = grid.index(xIndex, yIndex);
+            for (int yIndex = 1; yIndex <= height; yIndex++) {
+                int rowBase = yIndex * stride;
+                for (int xIndex = 1; xIndex <= width; xIndex++) {
+                    int index = rowBase + xIndex;
 
-                    int leftIndex = grid.index(xIndex - 1, yIndex);
-                    int rightIndex = grid.index(xIndex + 1, yIndex);
-                    int upIndex = grid.index(xIndex, yIndex + 1);
-                    int downIndex = grid.index(xIndex, yIndex - 1);
+                    int leftIndex = index - 1;
+                    int rightIndex = index + 1;
+                    int upIndex = index + stride;
+                    int downIndex = index - stride;
 
                     float neighborSum = iterationCurrent[leftIndex]
                             + iterationCurrent[rightIndex]
                             + iterationCurrent[upIndex]
                             + iterationCurrent[downIndex];
 
-                    iterationNext[index] = (sourceField[index] + spreadStrength * neighborSum) / normalizationValue;
+                    iterationNext[index] = (sourceField[index] + spreadStrength * neighborSum) * invNormalizationValue;
                 }
-            });
+            }
 
             boundaryHandler.applyBoundaries(boundaryType, nextField, grid);
 

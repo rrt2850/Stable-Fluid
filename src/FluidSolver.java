@@ -1,7 +1,6 @@
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.IntStream;
 
 /**
  * High-level controller that advances the fluid simulation forward in time.
@@ -27,6 +26,11 @@ public class FluidSolver {
     public final LinearSolver linearSolver;
     public final BoundaryHandler boundaryHandler;
 
+    /**
+     * Reused scratch buffer for vorticity confinement to avoid per-step allocations.
+     */
+    private final float[] curlMagnitudeBuffer;
+
     public FluidSolver(
             FluidGrid grid,
             SimulationParameters parameters,
@@ -43,6 +47,7 @@ public class FluidSolver {
 
         this.pressureField = new ScalarField(grid.totalCellCount);
         this.divergenceField = new ScalarField(grid.totalCellCount);
+        this.curlMagnitudeBuffer = new float[grid.totalCellCount];
 
         this.linearSolver = new LinearSolver(parameters.getLinearSolverIterations());
         this.boundaryHandler = new BoundaryHandler();
@@ -140,15 +145,20 @@ public class FluidSolver {
 
     private void projectVelocity() {
         float invTwoCellSize = 0.5f / grid.cellSize;
+        int stride = grid.width + 2;
+        int width = grid.width;
+        int height = grid.height;
+        float cellSizeSquared = grid.cellSize * grid.cellSize;
 
-        IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
-            for (int x = 1; x <= grid.width; x++) {
-                int i = grid.index(x, y);
+        for (int y = 1; y <= height; y++) {
+            int rowBase = y * stride;
+            for (int x = 1; x <= width; x++) {
+                int i = rowBase + x;
 
-                int left = grid.index(x - 1, y);
-                int right = grid.index(x + 1, y);
-                int down = grid.index(x, y - 1);
-                int up = grid.index(x, y + 1);
+                int left = i - 1;
+                int right = i + 1;
+                int down = i - stride;
+                int up = i + stride;
 
                 float uRight = velocityField.readVelocityX[right];
                 float uLeft = velocityField.readVelocityX[left];
@@ -158,17 +168,18 @@ public class FluidSolver {
                 divergenceField.writeValues[i] = -invTwoCellSize * ((uRight - uLeft) + (vUp - vDown));
                 pressureField.writeValues[i] = 0.0f;
             }
-        });
+        }
 
         divergenceField.swapBuffers();
         pressureField.swapBuffers();
 
-        IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
-            for (int x = 1; x <= grid.width; x++) {
-                int i = grid.index(x, y);
-                divergenceField.writeValues[i] = divergenceField.readValues[i] * grid.cellSize * grid.cellSize;
+        for (int y = 1; y <= height; y++) {
+            int rowBase = y * stride;
+            for (int x = 1; x <= width; x++) {
+                int i = rowBase + x;
+                divergenceField.writeValues[i] = divergenceField.readValues[i] * cellSizeSquared;
             }
-        });
+        }
         boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.SCALAR, divergenceField.writeValues, grid);
 
         boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.SCALAR, pressureField.readValues, grid);
@@ -183,14 +194,15 @@ public class FluidSolver {
                 boundaryHandler
         );
 
-        IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
-            for (int x = 1; x <= grid.width; x++) {
-                int i = grid.index(x, y);
+        for (int y = 1; y <= height; y++) {
+            int rowBase = y * stride;
+            for (int x = 1; x <= width; x++) {
+                int i = rowBase + x;
 
-                int left = grid.index(x - 1, y);
-                int right = grid.index(x + 1, y);
-                int down = grid.index(x, y - 1);
-                int up = grid.index(x, y + 1);
+                int left = i - 1;
+                int right = i + 1;
+                int down = i - stride;
+                int up = i + stride;
 
                 float pRight = pressureField.readValues[right];
                 float pLeft = pressureField.readValues[left];
@@ -200,7 +212,7 @@ public class FluidSolver {
                 velocityField.readVelocityX[i] -= invTwoCellSize * (pRight - pLeft);
                 velocityField.readVelocityY[i] -= invTwoCellSize * (pUp - pDown);
             }
-        });
+        }
 
         boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.H_VELOCITY, velocityField.readVelocityX, grid);
         boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.V_VELOCITY, velocityField.readVelocityY, grid);
@@ -211,6 +223,12 @@ public class FluidSolver {
         float timeStepSeconds = parameters.getTimeStep();
 
         float velocityToGridCells = timeStepSeconds / grid.cellSize;
+        int stride = grid.width + 2;
+        int width = grid.width;
+        int height = grid.height;
+        float minCoord = 0.5f;
+        float maxX = width + 0.5f;
+        float maxY = height + 0.5f;
 
         float[] currentVelocityX = velocityField.readVelocityX;
         float[] currentVelocityY = velocityField.readVelocityY;
@@ -218,24 +236,24 @@ public class FluidSolver {
         float[] sourceVelocityX = velocityField.readVelocityX;
         float[] sourceVelocityY = velocityField.readVelocityY;
 
-        IntStream.rangeClosed(1, grid.height).parallel().forEach(gridY -> {
-            for (int gridX = 1; gridX <= grid.width; gridX++) {
-
-                int cellIndex = grid.index(gridX, gridY);
+        for (int gridY = 1; gridY <= height; gridY++) {
+            int rowBase = gridY * stride;
+            for (int gridX = 1; gridX <= width; gridX++) {
+                int cellIndex = rowBase + gridX;
 
                 float sourceX = gridX - velocityToGridCells * currentVelocityX[cellIndex];
                 float sourceY = gridY - velocityToGridCells * currentVelocityY[cellIndex];
 
-                sourceX = clamp(sourceX, 0.5f, grid.width + 0.5f);
-                sourceY = clamp(sourceY, 0.5f, grid.height + 0.5f);
+                sourceX = clamp(sourceX, minCoord, maxX);
+                sourceY = clamp(sourceY, minCoord, maxY);
 
                 velocityField.writeVelocityX[cellIndex] =
-                        bilinearSample(sourceVelocityX, sourceX, sourceY);
+                        bilinearSample(sourceVelocityX, sourceX, sourceY, stride);
 
                 velocityField.writeVelocityY[cellIndex] =
-                        bilinearSample(sourceVelocityY, sourceX, sourceY);
+                        bilinearSample(sourceVelocityY, sourceX, sourceY, stride);
             }
-        });
+        }
 
         boundaryHandler.applyBoundaries(
                 BoundaryHandler.BoundaryType.H_VELOCITY,
@@ -259,32 +277,38 @@ public class FluidSolver {
 
         float dt = parameters.getTimeStep();
         float invTwoCellSize = 0.5f / grid.cellSize;
-        float[] curlMagnitude = new float[grid.totalCellCount];
+        int stride = grid.width + 2;
+        int width = grid.width;
+        int height = grid.height;
+        float forceScale = confinementStrength * grid.cellSize;
+        float[] curlMagnitude = curlMagnitudeBuffer;
 
-        IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
-            for (int x = 1; x <= grid.width; x++) {
-                int i = grid.index(x, y);
+        for (int y = 1; y <= height; y++) {
+            int rowBase = y * stride;
+            for (int x = 1; x <= width; x++) {
+                int i = rowBase + x;
 
-                int left = grid.index(x - 1, y);
-                int right = grid.index(x + 1, y);
-                int down = grid.index(x, y - 1);
-                int up = grid.index(x, y + 1);
+                int left = i - 1;
+                int right = i + 1;
+                int down = i - stride;
+                int up = i + stride;
 
                 float dVxDy = (velocityField.readVelocityX[up] - velocityField.readVelocityX[down]) * invTwoCellSize;
                 float dVyDx = (velocityField.readVelocityY[right] - velocityField.readVelocityY[left]) * invTwoCellSize;
 
                 curlMagnitude[i] = Math.abs(dVyDx - dVxDy);
             }
-        });
+        }
 
-        IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
-            for (int x = 1; x <= grid.width; x++) {
-                int i = grid.index(x, y);
+        for (int y = 1; y <= height; y++) {
+            int rowBase = y * stride;
+            for (int x = 1; x <= width; x++) {
+                int i = rowBase + x;
 
-                int left = grid.index(x - 1, y);
-                int right = grid.index(x + 1, y);
-                int down = grid.index(x, y - 1);
-                int up = grid.index(x, y + 1);
+                int left = i - 1;
+                int right = i + 1;
+                int down = i - stride;
+                int up = i + stride;
 
                 float dVxDy = (velocityField.readVelocityX[up] - velocityField.readVelocityX[down]) * invTwoCellSize;
                 float dVyDx = (velocityField.readVelocityY[right] - velocityField.readVelocityY[left]) * invTwoCellSize;
@@ -297,14 +321,13 @@ public class FluidSolver {
                 float normalX = gradX / gradLength;
                 float normalY = gradY / gradLength;
 
-                float forceScale = confinementStrength * grid.cellSize;
                 float forceX = forceScale * normalY * vorticity;
                 float forceY = -forceScale * normalX * vorticity;
 
                 velocityField.readVelocityX[i] += dt * forceX;
                 velocityField.readVelocityY[i] += dt * forceY;
             }
-        });
+        }
 
         boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.H_VELOCITY, velocityField.readVelocityX, grid);
         boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.V_VELOCITY, velocityField.readVelocityY, grid);
@@ -335,26 +358,32 @@ public class FluidSolver {
         float timeStepSeconds = parameters.getTimeStep();
 
         float velocityToGridCells = timeStepSeconds / grid.cellSize;
+        int stride = grid.width + 2;
+        int width = grid.width;
+        int height = grid.height;
+        float minCoord = 0.5f;
+        float maxX = width + 0.5f;
+        float maxY = height + 0.5f;
 
         float[] velocityX = velocityField.readVelocityX;
         float[] velocityY = velocityField.readVelocityY;
 
         float[] sourceDensity = densityField.readValues;
 
-        IntStream.rangeClosed(1, grid.height).parallel().forEach(gridY -> {
-            for (int gridX = 1; gridX <= grid.width; gridX++) {
-
-                int cellIndex = grid.index(gridX, gridY);
+        for (int gridY = 1; gridY <= height; gridY++) {
+            int rowBase = gridY * stride;
+            for (int gridX = 1; gridX <= width; gridX++) {
+                int cellIndex = rowBase + gridX;
 
                 float sourceX = gridX - velocityToGridCells * velocityX[cellIndex];
                 float sourceY = gridY - velocityToGridCells * velocityY[cellIndex];
 
-                sourceX = clamp(sourceX, 0.5f, grid.width + 0.5f);
-                sourceY = clamp(sourceY, 0.5f, grid.height + 0.5f);
+                sourceX = clamp(sourceX, minCoord, maxX);
+                sourceY = clamp(sourceY, minCoord, maxY);
 
-                densityField.writeValues[cellIndex] = bilinearSample(sourceDensity, sourceX, sourceY);
+                densityField.writeValues[cellIndex] = bilinearSample(sourceDensity, sourceX, sourceY, stride);
             }
-        });
+        }
 
         boundaryHandler.applyBoundaries(
                 BoundaryHandler.BoundaryType.SCALAR,
@@ -372,7 +401,7 @@ public class FluidSolver {
         return value;
     }
 
-    private float bilinearSample(float[] field, float sampleX, float sampleY) {
+    private float bilinearSample(float[] field, float sampleX, float sampleY, int stride) {
         int x0 = (int) sampleX;
         int y0 = (int) sampleY;
 
@@ -382,10 +411,13 @@ public class FluidSolver {
         float sx = sampleX - x0;
         float sy = sampleY - y0;
 
-        int i00 = grid.index(x0, y0);
-        int i10 = grid.index(x1, y0);
-        int i01 = grid.index(x0, y1);
-        int i11 = grid.index(x1, y1);
+        int row0 = y0 * stride;
+        int row1 = y1 * stride;
+
+        int i00 = row0 + x0;
+        int i10 = row0 + x1;
+        int i01 = row1 + x0;
+        int i11 = row1 + x1;
 
         float v00 = field[i00];
         float v10 = field[i10];
