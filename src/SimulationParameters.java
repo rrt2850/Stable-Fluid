@@ -11,7 +11,7 @@ public class SimulationParameters {
 
     /**
      * Viscosity of the fluid, how goopy the fluid is
-     * Controls velocity diffusion.
+     * Controls velocity diffusion
      */
     private float viscosity;
 
@@ -28,7 +28,7 @@ public class SimulationParameters {
 
     /**
      * Strength of vorticity confinement force used to re-inject small-scale swirl.
-     * 0 disables the force entirely.
+     * 0 disables the force entirely
      */
     private float vorticityConfinement;
 
@@ -55,12 +55,12 @@ public class SimulationParameters {
         this(0.016f, 0.0001f, 0.0001f, 20, 0.0f);
     }
 
-    /** Returns simulation seconds advanced per solver step. */
+    /** Returns simulation seconds advanced per solver step */
     public float getTimeStep() {
         return timeStep;
     }
 
-    /** Sets the integration time step; smaller values are safer but slower. */
+    /** Sets the integration time step; smaller values are safer but slower */
     public void setTimeStep(float timeStep) {
         if (timeStep <= 0f) {
             throw new IllegalArgumentException("timeStep must be > 0");
@@ -68,12 +68,12 @@ public class SimulationParameters {
         this.timeStep = timeStep;
     }
 
-    /** Returns viscosity, which controls how quickly momentum smears out. */
+    /** Returns viscosity, which controls how quickly momentum smears out */
     public float getViscosity() {
         return viscosity;
     }
 
-    /** Sets viscosity (0 = no viscous smoothing, larger = thicker behavior). */
+    /** Sets viscosity (0 = no viscous smoothing, larger = thicker behavior) */
     public void setViscosity(float viscosity) {
         if (viscosity < 0f) {
             throw new IllegalArgumentException("viscosity must be >= 0");
@@ -81,12 +81,12 @@ public class SimulationParameters {
         this.viscosity = viscosity;
     }
 
-    /** Returns density diffusion rate (how quickly smoke/color spreads). */
+    /** Returns density diffusion rate (how quickly smoke/color spreads) */
     public float getDiffusionRate() {
         return diffusionRate;
     }
 
-    /** Sets density diffusion rate; higher values blur density faster. */
+    /** Sets density diffusion rate; higher values blur density faster */
     public void setDiffusionRate(float diffusionRate) {
         if (diffusionRate < 0f) {
             throw new IllegalArgumentException("diffusionRate must be >= 0");
@@ -94,12 +94,12 @@ public class SimulationParameters {
         this.diffusionRate = diffusionRate;
     }
 
-    /** Returns the number of relaxation passes used by linear solves. */
+    /** Returns the number of relaxation passes used by linear solves */
     public int getLinearSolverIterations() {
         return linearSolverIterations;
     }
 
-    /** Sets solve iterations; more iterations improve accuracy but cost more CPU. */
+    /** Sets solve iterations; more iterations improve accuracy but cost more CPU */
     public void setLinearSolverIterations(int linearSolverIterations) {
         if (linearSolverIterations <= 0) {
             throw new IllegalArgumentException("linearSolverIterations must be > 0");
@@ -107,12 +107,12 @@ public class SimulationParameters {
         this.linearSolverIterations = linearSolverIterations;
     }
 
-    /** Returns swirl-preservation strength added after advection. */
+    /** Returns swirl-preservation strength added after advection */
     public float getVorticityConfinement() {
         return vorticityConfinement;
     }
 
-    /** Sets swirl-preservation strength; zero disables the effect. */
+    /** Sets swirl-preservation strength; zero disables the effect */
     public void setVorticityConfinement(float vorticityConfinement) {
         if (vorticityConfinement < 0f) {
             throw new IllegalArgumentException("vorticityConfinement must be >= 0");

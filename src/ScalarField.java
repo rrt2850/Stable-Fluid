@@ -22,9 +22,9 @@ public class ScalarField {
     }
 
     /**
-     * Resets both buffers to zero.
+     * Resets both buffers to zero
      *
-     * <p>This is useful when restarting a simulation or clearing temporary fields.</p>
+     * <p>This is useful when restarting a simulation or clearing temporary fields</p>
      */
     public void clear() {
         Arrays.fill(readValues, 0f);

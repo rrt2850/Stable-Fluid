@@ -1,12 +1,12 @@
 /**
- * Pulls nearby fluid toward its center and removes density, acting like a sink.
+ * Pulls nearby fluid toward its center and removes density, acting like a sink
  *
- * @param gridX             X-coordinate of the vortex center in grid space.
- * @param gridY             Y-coordinate of the vortex center in grid space.
- * @param radius            Radius of influence.
- * @param suctionStrength   Inward pull magnitude applied to velocity.
- * @param absorptionRate    Density removed per second near the center.
- * @param swirlStrength     Tangential spin strength for whirlpool-like circular flow.
+ * @param gridX             X-coordinate of the vortex center in grid space
+ * @param gridY             Y-coordinate of the vortex center in grid space
+ * @param radius            Radius of influence
+ * @param suctionStrength   Inward pull magnitude applied to velocity
+ * @param absorptionRate    Density removed per second near the center
+ * @param swirlStrength     Tangential spin strength for whirlpool-like circular flow
  */
 public record Vortex(int gridX, int gridY, int radius, float suctionStrength, float absorptionRate,
                      float swirlStrength) {
@@ -14,7 +14,7 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
     private static final int MIN_RADIUS = 1;
 
     /**
-     * Pulls velocity inward while adding sideways spin to create a whirlpool effect.
+     * Pulls velocity inward while adding sideways spin to create a whirlpool effect
      */
     public void applyVelocity(VectorField velocity, FluidGrid grid, float timeStepSeconds) {
         if (!grid.inBounds(gridX, gridY)) {
@@ -59,7 +59,7 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
     }
 
     /**
-     * Removes density near the vortex center so material appears to be swallowed.
+     * Removes density near the vortex center so material appears to be swallowed
      */
     public void absorbDensity(ScalarField densityField, FluidGrid grid, float timeStepSeconds) {
         if (!grid.inBounds(gridX, gridY)) {

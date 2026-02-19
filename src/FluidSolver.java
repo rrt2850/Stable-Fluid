@@ -15,9 +15,11 @@ public class FluidSolver {
     private List<RadialFluidEmitter> radialEmitters = new ArrayList<>();
     private List<Vortex> vortexes = new ArrayList<>();
 
+    // The fluid grid and parameters for it
     public final FluidGrid grid;
     public final SimulationParameters parameters;
 
+    // The velocity and density fields
     public final VectorField velocityField;
     public final ScalarField redDensityField;
     public final ScalarField greenDensityField;
@@ -26,6 +28,7 @@ public class FluidSolver {
     public final ScalarField pressureField;
     public final ScalarField divergenceField;
 
+    // The linear solver and boundary handler
     public final LinearSolver linearSolver;
     public final BoundaryHandler boundaryHandler;
 
@@ -42,10 +45,10 @@ public class FluidSolver {
     }
 
     /**
-     * Builds a solver and validates that all injectors are inside the grid.
+     * Builds a solver and validates that all injectors are inside the grid
      *
      * <p>The solver owns the simulation fields and applies the Stable Fluids update
-     * sequence each time {@link #step()} is called.</p>
+     * sequence each time {@link #step()} is called</p>
      */
     public FluidSolver(
             FluidGrid grid,
@@ -104,11 +107,12 @@ public class FluidSolver {
         }
     }
 
+
     /**
      * Advances the simulation by one time step.
      *
      * <p>The order is: add sources, diffuse/project velocity, advect velocity, apply
-     * swirl recovery, re-project, then diffuse/advect each color density channel.</p>
+     * swirl recovery, re-project, then diffuse/advect each color density channel</p>
      */
     public void step() {
         addSources();
@@ -117,7 +121,7 @@ public class FluidSolver {
         projectVelocity();
 
         advectVelocity();
-        applyVorticityConfinement();
+        applyVorticity();
         projectVelocity();
 
         diffuseDensity(redDensityField);
@@ -134,6 +138,7 @@ public class FluidSolver {
 
         float dt = parameters.getTimeStep();
 
+        // Loop through all the fluid sources and apply density for each of them
         for (FluidSource source : densitySources) {
             if (!grid.inBounds(source.gridX, source.gridY)) {
                 continue;
@@ -144,6 +149,8 @@ public class FluidSolver {
             blueDensityField.readValues[index] += dt * source.strength;
         }
 
+        // Loop through all the fluid emitters and have them apply their own density and
+        // velocity functions
         for (FluidEmitter emitter : emitters) {
             if (!grid.inBounds(emitter.gridX(), emitter.gridY())) {
                 continue;
@@ -152,6 +159,8 @@ public class FluidSolver {
             emitter.applyVelocity(velocityField, grid);
         }
 
+        // Loop through all the radial fluid emitters and have them apply their own density and
+        // velocity functions
         for (RadialFluidEmitter radialEmitter : radialEmitters) {
             if (!grid.inBounds(radialEmitter.gridX(), radialEmitter.gridY())) {
                 continue;
@@ -160,6 +169,7 @@ public class FluidSolver {
             radialEmitter.applyVelocity(velocityField, grid);
         }
 
+        // Loop through all the vortexes and have them apply all their absorbtion fucnctions
         for (Vortex vortex : vortexes) {
             if (!grid.inBounds(vortex.gridX(), vortex.gridY())) {
                 continue;
@@ -171,18 +181,20 @@ public class FluidSolver {
         }
     }
 
-    /** Smooths velocity to model viscosity (thicker fluid spreads momentum faster). */
+    /** Smooths velocity to model viscosity (thicker fluid spreads momentum faster) */
     private void diffuseVelocity() {
         float timeStep = parameters.getTimeStep();
         float viscosity = parameters.getViscosity();
 
         // Stable Fluids diffusion constant:
         // spreadStrength = (secondsPerStep * fluidViscosity) / (cellWidth^2)
-        // Larger values make momentum blur across neighbors more each step.
+        // Larger values make momentum blur across neighbors more each step
         float spreadStrength = timeStep * viscosity / (grid.cellSize * grid.cellSize);
+
         // Each Jacobi update divides by (centerWeight + 4 neighbor weights).
         float normalizationValue = 1.0f + 4.0f * spreadStrength;
 
+        // Solve horizontal and vertical velocities so each cell is smoothed with it's neighbors
         linearSolver.solve(
                 BoundaryHandler.BoundaryType.H_VELOCITY,
                 velocityField.writeVelocityX,
@@ -203,26 +215,34 @@ public class FluidSolver {
                 boundaryHandler
         );
 
+        // Swap the read and write buffers so the latest read buffer is accurate
         velocityField.swapBuffers();
     }
 
     /**
-     * Enforces near-incompressibility by removing divergence from velocity.
+     * Enforces incompressibility by removing divergence from velocity
      *
-     * <p>Intuitively: make sure flow neither creates nor destroys volume in a cell.</p>
+     * <p>Makes sure flow neither creates or destroys volume in a cell</p>
      *
-     * <p>Math in plain names:</p>
+     * <p>Math:</p>
      * <ul>
      *   <li><b>velocityDivergence</b> = -0.5/cellWidth * ((rightVelocityX - leftVelocityX)
      *       + (topVelocityY - bottomVelocityY))</li>
-     *   <li>Solve Poisson equation for <b>pressure</b> so pressure gradients cancel divergence.</li>
+     *   <li>Solve Poisson equation for <b>pressure</b> so pressure gradients cancel divergence</li>
      *   <li>Correct velocity with pressure gradient:
      *       correctedVelocityX = velocityX - 0.5/cellWidth * (pressureRight - pressureLeft)</li>
      * </ul>
      */
     private void projectVelocity() {
-        float invTwoCellSize = 0.5f / grid.cellSize;
+        // Precompute 1 / (2 * cellSize) for centered finite differences
+        // The denominator for (b-a) / (2 * cellSize)
+        // This is used to approximate spatial derivatives
+        float centeredDifferenceDenom = 0.5f / grid.cellSize;
 
+
+        // Compute velocity divergence at cell centers
+        // Divergence measures local volume expansion or compression
+        // A divergence-free field conserves volume (incompressible flow)
         IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
             for (int x = 1; x <= grid.width; x++) {
                 int i = grid.index(x, y);
@@ -232,42 +252,67 @@ public class FluidSolver {
                 int down = grid.index(x, y - 1);
                 int up = grid.index(x, y + 1);
 
-                // Sample neighboring velocity components around this cell center.
-                float uRight = velocityField.readVelocityX[right];
-                float uLeft = velocityField.readVelocityX[left];
-                float vUp = velocityField.readVelocityY[up];
-                float vDown = velocityField.readVelocityY[down];
+                // Sample neighboring velocity components around this cell
+                // Using centered differences gives second-order accuracy
+                float hvRight = velocityField.readVelocityX[right];
+                float hvLeft  = velocityField.readVelocityX[left];
+                float vvUp    = velocityField.readVelocityY[up];
+                float vvDown  = velocityField.readVelocityY[down];
 
-                // Divergence tells us whether the cell acts like a source/sink of volume.
-                divergenceField.writeValues[i] = -invTwoCellSize * ((uRight - uLeft) + (vUp - vDown));
+                // Discrete divergence:
+                // (du/dx + dv/dy) evaluated at the cell center
+                // The negative sign matches the Poisson equation convention used later
+                divergenceField.writeValues[i] =
+                        -centeredDifferenceDenom * ((hvRight - hvLeft) + (vvUp - vvDown));
+
+                // Initialize pressure guess to zero for the solver.
                 pressureField.writeValues[i] = 0.0f;
             }
         });
 
+        // Swap buffers so divergence and pressure become readable
         divergenceField.swapBuffers();
         pressureField.swapBuffers();
 
+        // Scale divergence to match the discrete Poisson equation
+        // The linear solver assumes:
+        //     laplacian(pressure) = divergence * cellSize^2
+        // Parallel so this doesn't take years
         IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
             for (int x = 1; x <= grid.width; x++) {
                 int i = grid.index(x, y);
-                // Scale RHS by cellWidth^2 to match the discrete Poisson form used by linearSolver.
-                divergenceField.writeValues[i] = divergenceField.readValues[i] * grid.cellSize * grid.cellSize;
+                divergenceField.writeValues[i] =
+                        divergenceField.readValues[i] * grid.cellSize * grid.cellSize;
             }
         });
-        boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.SCALAR, divergenceField.writeValues, grid);
 
-        boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.SCALAR, pressureField.readValues, grid);
+        // Apply scalar boundary conditions to divergence and pressure
+        boundaryHandler.applyBoundaries(
+                BoundaryHandler.BoundaryType.SCALAR,
+                divergenceField.writeValues,
+                grid
+        );
 
-        linearSolver.solve(
+        boundaryHandler.applyBoundaries(
                 BoundaryHandler.BoundaryType.SCALAR,
                 pressureField.readValues,
-                divergenceField.writeValues,
-                1.0f,
-                4.0f,
+                grid
+        );
+
+        // Solve Poisson equation for pressure
+        // This finds the pressure field whose gradient cancels divergence
+        linearSolver.solve(
+                BoundaryHandler.BoundaryType.SCALAR,
+                pressureField.readValues,     // unknown (pressure)
+                divergenceField.writeValues,  // right-hand side (scaled divergence)
+                1.0f,                         // center coefficient
+                4.0f,                         // neighbor sum coefficient (2D grid)
                 grid,
                 boundaryHandler
         );
 
+        // Subtract pressure gradient from velocity
+        // This removes divergence and enforces incompressibility
         IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
             for (int x = 1; x <= grid.width; x++) {
                 int i = grid.index(x, y);
@@ -277,152 +322,187 @@ public class FluidSolver {
                 int down = grid.index(x, y - 1);
                 int up = grid.index(x, y + 1);
 
+                // Centered finite differences of pressure
                 float pRight = pressureField.readValues[right];
-                float pLeft = pressureField.readValues[left];
-                float pUp = pressureField.readValues[up];
-                float pDown = pressureField.readValues[down];
+                float pLeft  = pressureField.readValues[left];
+                float pUp    = pressureField.readValues[up];
+                float pDown  = pressureField.readValues[down];
 
-                // Subtract pressure gradient so the final flow is approximately divergence-free.
-                velocityField.readVelocityX[i] -= invTwoCellSize * (pRight - pLeft);
-                velocityField.readVelocityY[i] -= invTwoCellSize * (pUp - pDown);
+                // Velocity minus pressure gradient:  (b-a) / (2 * cellSize)
+                velocityField.readVelocityX[i] -= centeredDifferenceDenom * (pRight - pLeft);
+                velocityField.readVelocityY[i] -= centeredDifferenceDenom * (pUp - pDown);
             }
         });
 
-        boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.H_VELOCITY, velocityField.readVelocityX, grid);
-        boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.V_VELOCITY, velocityField.readVelocityY, grid);
-    }
-
-    /**
-     * Moves velocity through the grid by tracing each cell backward along the flow.
-     *
-     * <p>Backtrace equation with descriptive names:</p>
-     * <p><b>sourcePosition</b> = <b>cellCenterPosition</b> - (secondsPerStep / cellWidth) * <b>cellVelocity</b></p>
-     * <p>We then bilinearly sample velocity at that sourcePosition.</p>
-     */
-    private void advectVelocity() {
-
-        float timeStepSeconds = parameters.getTimeStep();
-
-        float velocityToGridCells = timeStepSeconds / grid.cellSize;
-
-        float[] currentVelocityX = velocityField.readVelocityX;
-        float[] currentVelocityY = velocityField.readVelocityY;
-
-        float[] sourceVelocityX = velocityField.readVelocityX;
-        float[] sourceVelocityY = velocityField.readVelocityY;
-
-        IntStream.rangeClosed(1, grid.height).parallel().forEach(gridY -> {
-            for (int gridX = 1; gridX <= grid.width; gridX++) {
-
-                int cellIndex = grid.index(gridX, gridY);
-
-                // Semi-Lagrangian step: trace backwards to where this parcel came from last frame.
-                float sourceX = gridX - velocityToGridCells * currentVelocityX[cellIndex];
-                float sourceY = gridY - velocityToGridCells * currentVelocityY[cellIndex];
-
-                sourceX = clamp(sourceX, 0.5f, grid.width + 0.5f);
-                sourceY = clamp(sourceY, 0.5f, grid.height + 0.5f);
-
-                velocityField.writeVelocityX[cellIndex] =
-                        bilinearSample(sourceVelocityX, sourceX, sourceY);
-
-                velocityField.writeVelocityY[cellIndex] =
-                        bilinearSample(sourceVelocityY, sourceX, sourceY);
-            }
-        });
-
+        // Enforce velocity boundary conditions after projection
         boundaryHandler.applyBoundaries(
                 BoundaryHandler.BoundaryType.H_VELOCITY,
-                velocityField.writeVelocityX,
+                velocityField.readVelocityX,
                 grid
         );
         boundaryHandler.applyBoundaries(
                 BoundaryHandler.BoundaryType.V_VELOCITY,
-                velocityField.writeVelocityY,
+                velocityField.readVelocityY,
                 grid
         );
-
-        velocityField.swapBuffers();
     }
 
     /**
-     * Adds a small rotational boost to preserve visible swirls lost to numerical diffusion.
+     * Applies vorticity confinement to re-introduce small-scale swirling motion
+     * that is otherwise damped out by numerical diffusion
      *
-     * <p>Plain-language variable mapping:</p>
-     * <ul>
-     *   <li><b>vorticity</b> = d(velocityY)/dx - d(velocityX)/dy (local spin amount)</li>
-     *   <li><b>curlMagnitudeGradient</b> points toward stronger spinning regions</li>
-     *   <li>Confinement force is perpendicular to that gradient and scaled by spin</li>
-     * </ul>
+     *  - Compute scalar vorticity (curl of the velocity field)
+     *  - Compute the gradient of |vorticity| to find where spin intensity increases
+     *  - Apply a force perpendicular to that gradient, scaled by the local spin
+     *
+     * This creates tight, visually pretty vortices without affecting large-scale flow.
      */
-    private void applyVorticityConfinement() {
+    private void applyVorticity() {
         float confinementStrength = parameters.getVorticityConfinement();
+
+        // Exit early if there's no vorticity confinement
         if (confinementStrength <= 0.0f) {
             return;
         }
 
-        float dt = parameters.getTimeStep();
-        float invTwoCellSize = 0.5f / grid.cellSize;
+        float timeStep = parameters.getTimeStep();
+
+        // Precompute 1 / (2 * cellSize) for centered finite differences
+        float centeredDifferenceDenom = 0.5f / grid.cellSize;
+
+        // Stores |curl| at each grid cell (scalar field)
         float[] curlMagnitude = new float[grid.totalCellCount];
 
+        /*
+         * Compute vorticity magnitude at each cell
+         *
+         * Vorticity (scalar, 2D):
+         *   vorticity = d(velocityY)/dx − d(velocityX)/dy
+         *
+         * We store only the absolute value here because we only need its spatial
+         * gradient direction (toward stronger rotational motion)
+         */
         IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
             for (int x = 1; x <= grid.width; x++) {
                 int i = grid.index(x, y);
 
-                int left = grid.index(x - 1, y);
+                // Neighbor indices for centered differences
+                int left  = grid.index(x - 1, y);
                 int right = grid.index(x + 1, y);
-                int down = grid.index(x, y - 1);
-                int up = grid.index(x, y + 1);
+                int down  = grid.index(x, y - 1);
+                int up    = grid.index(x, y + 1);
 
-                // Estimate partial derivatives with centered differences.
-                float dVxDy = (velocityField.readVelocityX[up] - velocityField.readVelocityX[down]) * invTwoCellSize;
-                float dVyDx = (velocityField.readVelocityY[right] - velocityField.readVelocityY[left]) * invTwoCellSize;
+                // Partial derivative of horizontal velocity with respect to Y
+                float dVxDy =
+                        (velocityField.readVelocityX[up] -
+                                velocityField.readVelocityX[down]) * centeredDifferenceDenom;
 
+                // Partial derivative of vertical velocity with respect to X
+                float dVyDx =
+                        (velocityField.readVelocityY[right] -
+                                velocityField.readVelocityY[left]) * centeredDifferenceDenom;
+
+                // Store absolute vorticity magnitude
                 curlMagnitude[i] = Math.abs(dVyDx - dVxDy);
             }
         });
 
+        /*
+         * PASS 2: Apply vorticity confinement force
+         *
+         * Confinement force:
+         *   confinementForce = strength * cellSize *
+         *                      (normalizedGradientOfVorticityMagnitude
+         *                       x
+         *                       vorticity)
+         *
+         * where:
+         *   - strength  = user-defined confinement strength
+         *   - cellSize  = grid resolution
+         *   - normalizedGradientOfVorticityMagnitude points toward stronger rotation
+         *   - vorticity is the signed scalar curl at the cell
+         *
+         * In 2D, the cross product reduces to a perpendicular vector scaled
+         * by the vorticity value
+         */
         IntStream.rangeClosed(1, grid.height).parallel().forEach(y -> {
             for (int x = 1; x <= grid.width; x++) {
                 int i = grid.index(x, y);
 
-                int left = grid.index(x - 1, y);
+                // Neighbor indices
+                int left  = grid.index(x - 1, y);
                 int right = grid.index(x + 1, y);
-                int down = grid.index(x, y - 1);
-                int up = grid.index(x, y + 1);
+                int down  = grid.index(x, y - 1);
+                int up    = grid.index(x, y + 1);
 
-                float dVxDy = (velocityField.readVelocityX[up] - velocityField.readVelocityX[down]) * invTwoCellSize;
-                float dVyDx = (velocityField.readVelocityY[right] - velocityField.readVelocityY[left]) * invTwoCellSize;
+                // Recompute signed vorticity at this cell
+                float dVxDy =
+                        (velocityField.readVelocityX[up] -
+                                velocityField.readVelocityX[down]) * centeredDifferenceDenom;
+
+                float dVyDx =
+                        (velocityField.readVelocityY[right] -
+                                velocityField.readVelocityY[left]) * centeredDifferenceDenom;
+
                 float vorticity = dVyDx - dVxDy;
 
-                // Gradient of |curl| tells us where swirling is strongest nearby.
-                float gradX = (curlMagnitude[right] - curlMagnitude[left]) * invTwoCellSize;
-                float gradY = (curlMagnitude[up] - curlMagnitude[down]) * invTwoCellSize;
+                // Gradient of |vorticityMagnitude| points toward regions of stronger rotation
+                // Calculated using (b-a) / (2 * cellSize)
+                float gradX =
+                        (curlMagnitude[right] -
+                                curlMagnitude[left]) * centeredDifferenceDenom;
 
-                float gradLength = (float) Math.sqrt(gradX * gradX + gradY * gradY) + 1e-6f;
+                float gradY =
+                        (curlMagnitude[up] -
+                                curlMagnitude[down]) * centeredDifferenceDenom;
+
+                // Normalize gradient (avoid divide-by-zero with tiny value)
+                float gradLength =
+                        (float) Math.sqrt(gradX * gradX + gradY * gradY) + 1e-6f;
+
                 float normalX = gradX / gradLength;
                 float normalY = gradY / gradLength;
 
+                // Scale force by user strength and grid resolution
                 float forceScale = confinementStrength * grid.cellSize;
-                // Rotate the normalized gradient by 90 degrees to get a tangential force direction.
-                float forceX = forceScale * normalY * vorticity;
+
+                // Rotate gradient 90 degrees to obtain tangential force direction
+                // This causes the force to reinforce rotation rather than cancel it
+                float forceX =  forceScale * normalY * vorticity;
                 float forceY = -forceScale * normalX * vorticity;
 
-                velocityField.readVelocityX[i] += dt * forceX;
-                velocityField.readVelocityY[i] += dt * forceY;
+                // Explicitly integrate confinement force into velocity
+                velocityField.readVelocityX[i] += timeStep * forceX;
+                velocityField.readVelocityY[i] += timeStep * forceY;
             }
         });
 
-        boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.H_VELOCITY, velocityField.readVelocityX, grid);
-        boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.V_VELOCITY, velocityField.readVelocityY, grid);
+        // Enforce the boundary conditions
+        boundaryHandler.applyBoundaries(
+                BoundaryHandler.BoundaryType.H_VELOCITY,
+                velocityField.readVelocityX,
+                grid
+        );
+
+        boundaryHandler.applyBoundaries(
+                BoundaryHandler.BoundaryType.V_VELOCITY,
+                velocityField.readVelocityY,
+                grid
+        );
     }
+
 
     /** Diffuses one density channel, softening sharp concentration gradients. */
     private void diffuseDensity(ScalarField densityField) {
         float timeStep = parameters.getTimeStep();
         float diffusionRate = parameters.getDiffusionRate();
 
+        // Diffusion coefficient for implicit solve:
+        // spreadStrength = (dt * diffusionRate) / (cellSize squared)
         float spreadStrength = timeStep * diffusionRate / (grid.cellSize * grid.cellSize);
+
+        // Diagonal term of the 5-point Laplacian stencil:
+        // (1 + 4 * spreadStrength) * density_center
         float normalizationValue = 1.0f + 4.0f * spreadStrength;
 
         linearSolver.solve(
@@ -439,50 +519,126 @@ public class FluidSolver {
     }
 
     /**
-     * Transports one density channel along the current velocity field.
+     * Moves velocity through the grid by tracing each cell backward along the flow
      *
-     * <p>Same backtrace rule as velocity advection:</p>
-     * <p><b>sourceCell</b> = <b>currentCell</b> - scaledVelocity, where
-     * scaledVelocity = (secondsPerStep / cellWidth) * velocityInWorldUnits.</p>
+     * <p>Backtrace equation:</p>
+     * <p><b>sourcePosition</b> = <b>cellCenterPosition</b> - (secondsPerStep / cellWidth) * <b>cellVelocity</b></p>
+     * <p>We then bilinearly sample velocity at that sourcePosition</p>
      */
-    private void advectDensity(ScalarField densityField) {
-
+    private void advectVelocity() {
+        // Duration of the simulation step in seconds
         float timeStepSeconds = parameters.getTimeStep();
+        float dtOverDx = timeStepSeconds / grid.cellSize;
 
-        float velocityToGridCells = timeStepSeconds / grid.cellSize;
+        // Read buffers: velocity field from the previous frame
+        float[] currentVelocityX = velocityField.readVelocityX;
+        float[] currentVelocityY = velocityField.readVelocityY;
 
-        float[] velocityX = velocityField.readVelocityX;
-        float[] velocityY = velocityField.readVelocityY;
+        // Source fields to sample from (same as read buffers for semi-Lagrangian advection)
+        float[] sourceVelocityX = velocityField.readVelocityX;
+        float[] sourceVelocityY = velocityField.readVelocityY;
 
-        float[] sourceDensity = densityField.readValues;
-
+        // Iterate over interior grid cells (parallelized over rows)
         IntStream.rangeClosed(1, grid.height).parallel().forEach(gridY -> {
             for (int gridX = 1; gridX <= grid.width; gridX++) {
 
+                // Convert 2D grid coordinates into 1D array index
                 int cellIndex = grid.index(gridX, gridY);
 
-                // Trace this density sample backward through the velocity field.
-                float sourceX = gridX - velocityToGridCells * velocityX[cellIndex];
-                float sourceY = gridY - velocityToGridCells * velocityY[cellIndex];
+                // Semi-Lagrangian backtrace
+                // Trace the velocity at this cell backward in time to find
+                // where the fluid originated in the previous frame
+                float sourceX = gridX - dtOverDx * currentVelocityX[cellIndex];
+                float sourceY = gridY - dtOverDx * currentVelocityY[cellIndex];
 
+                // Clamp source position to valid sampling range
+                // (cell centers are offset by 0.5)
                 sourceX = clamp(sourceX, 0.5f, grid.width + 0.5f);
                 sourceY = clamp(sourceY, 0.5f, grid.height + 0.5f);
 
-                densityField.writeValues[cellIndex] = bilinearSample(sourceDensity, sourceX, sourceY);
+                // Sample the X component of velocity at the backtraced position
+                velocityField.writeVelocityX[cellIndex] =
+                        bilinearSample(sourceVelocityX, sourceX, sourceY);
+
+                // Sample the Y component of velocity at the backtraced position
+                velocityField.writeVelocityY[cellIndex] =
+                        bilinearSample(sourceVelocityY, sourceX, sourceY);
             }
         });
 
+        // Enforce horizontal velocity boundary conditions
+        boundaryHandler.applyBoundaries(
+                BoundaryHandler.BoundaryType.H_VELOCITY,
+                velocityField.writeVelocityX,
+                grid
+        );
+
+        // Enforce vertical velocity boundary conditions
+        boundaryHandler.applyBoundaries(
+                BoundaryHandler.BoundaryType.V_VELOCITY,
+                velocityField.writeVelocityY,
+                grid
+        );
+
+        // Update the read buffer for the next step
+        velocityField.swapBuffers();
+    }
+
+    /**
+     * Transports one density channel along the current velocity field
+     *
+     * <p>Uses semi-Lagrangian advection:</p>
+     * <p><b>sourceCell</b> = <b>currentCell</b> - (secondsPerStep / cellWidth) * <b>cellVelocity</b></p>
+     * <p>The density value is then bilinearly sampled at that source position.</p>
+     */
+    private void advectDensity(ScalarField densityField) {
+
+        // Duration of the simulation step in seconds
+        float timeStepSeconds = parameters.getTimeStep();
+        float dtOverDx = timeStepSeconds / grid.cellSize;
+
+        // Read buffers: velocity field from the previous frame
+        float[] velocityX = velocityField.readVelocityX;
+        float[] velocityY = velocityField.readVelocityY;
+
+        // Source density field to sample from
+        float[] sourceDensity = densityField.readValues;
+
+        // Iterate over interior grid cells (parallelized over rows)
+        IntStream.rangeClosed(1, grid.height).parallel().forEach(gridY -> {
+            for (int gridX = 1; gridX <= grid.width; gridX++) {
+
+                // Convert 2D grid coordinates into 1D array index
+                int cellIndex = grid.index(gridX, gridY);
+
+                // Semi-Lagrangian backtrace
+                // Trace this density sample backward through the velocity field
+                float sourceX = gridX - dtOverDx * velocityX[cellIndex];
+                float sourceY = gridY - dtOverDx * velocityY[cellIndex];
+
+                // Clamp source position to valid sampling range
+                // (cell centers are offset by 0.5)
+                sourceX = clamp(sourceX, 0.5f, grid.width + 0.5f);
+                sourceY = clamp(sourceY, 0.5f, grid.height + 0.5f);
+
+                // Sample density at the backtraced position
+                densityField.writeValues[cellIndex] =
+                        bilinearSample(sourceDensity, sourceX, sourceY);
+            }
+        });
+
+        // Enforce scalar boundary conditions
         boundaryHandler.applyBoundaries(
                 BoundaryHandler.BoundaryType.SCALAR,
                 densityField.writeValues,
                 grid
         );
 
+        // Update the read buffer for the next step
         densityField.swapBuffers();
     }
 
-
-    /** Clamps a value to [min, max]. */
+    /** Clamps a value to [min, max] */
     private static float clamp(float value, float min, float max) {
         if (value < min) return min;
         if (value > max) return max;
@@ -490,9 +646,8 @@ public class FluidSolver {
     }
 
     /**
-     * Samples a grid field at a non-integer location using bilinear interpolation.
+     * Samples a grid field at a non-integer location using bilinear interpolation
      *
-     * <p>Readable formula:</p>
      * <p>interpolatedValue = lerpY( lerpX(bottomLeft, bottomRight),
      * lerpX(topLeft, topRight) ) using fractional offsets inside the cell.</p>
      */
@@ -522,53 +677,24 @@ public class FluidSolver {
         return lerpX0 + sy * (lerpX1 - lerpX0);
     }
 
-    /** Registers an additional point density source during runtime. */
+    /** Registers an additional point density source during runtime */
     public void addDensitySource(FluidSource source) {
         Objects.requireNonNull(source, "density source must not be null");
         validateInBounds(source.gridX, source.gridY, "density source");
         densitySources.add(source);
     }
 
-    /** Registers an additional directional emitter during runtime. */
+    /** Registers an additional directional emitter during runtime */
     public void addEmitter(FluidEmitter emitter) {
         Objects.requireNonNull(emitter, "emitter must not be null");
         validateInBounds(emitter.gridX(), emitter.gridY(), "emitter");
         emitters.add(emitter);
     }
 
-    /** Throws if a user-provided object sits outside the active simulation area. */
+    /** Throws if a user-provided object sits outside the active simulation area */
     private void validateInBounds(int gridX, int gridY, String objectType) {
         if (!grid.inBounds(gridX, gridY)) {
             throw new IllegalArgumentException(objectType + " out of bounds: (" + gridX + ", " + gridY + ")");
         }
-    }
-
-    /**
-     * Computes the root-mean-square (RMS) velocity divergence across active cells.
-     *
-     * <p>For an incompressible flow this value should remain close to zero after
-     * projection. It is useful as a quick correctness signal for a Stable Fluids step.</p>
-     */
-    public float computeVelocityDivergenceRms() {
-        float invTwoCellSize = 0.5f / grid.cellSize;
-        float sumSquares = 0.0f;
-        int activeCells = grid.width * grid.height;
-
-        for (int y = 1; y <= grid.height; y++) {
-            for (int x = 1; x <= grid.width; x++) {
-                int left = grid.index(x - 1, y);
-                int right = grid.index(x + 1, y);
-                int down = grid.index(x, y - 1);
-                int up = grid.index(x, y + 1);
-
-                float duDx = (velocityField.readVelocityX[right] - velocityField.readVelocityX[left]) * invTwoCellSize;
-                float dvDy = (velocityField.readVelocityY[up] - velocityField.readVelocityY[down]) * invTwoCellSize;
-
-                float divergence = duDx + dvDy;
-                sumSquares += divergence * divergence;
-            }
-        }
-
-        return (float) Math.sqrt(sumSquares / activeCells);
     }
 }

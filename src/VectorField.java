@@ -14,7 +14,7 @@ public class VectorField {
     public float[] writeVelocityY;
 
     /**
-     * Creates a velocity field with separate read/write buffers for X and Y velocity.
+     * Creates a velocity field with separate read/write buffers for X and Y velocity
      *
      * @param totalCellCount number of active + ghost cells in the grid
      */
