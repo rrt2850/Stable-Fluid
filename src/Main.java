@@ -24,7 +24,7 @@ public class Main {
     private static final float MAX_EMISSION_SPEED = 1.1f;
     private static final float TIMESTEP = 0.020f;
     private static final float VISCOSITY = 0.0000001f;
-    private static final float DIFFUSION_RATE = 0.00001f;
+    private static final float DIFFUSION_RATE = 0.000006f;
     private static final int SOLVER_ITERATIONS = 25;
     private static final float VORTICITY_CONFINEMENT = 10.0f;
 
@@ -119,20 +119,30 @@ public class Main {
         List<FluidSource> sources = List.of();
 
         Random random = new Random(RANDOM_SEED);
-        List<FluidEmitter> emitters = generateEdgeEmitters(grid, config.emitterCount, random);
+        List<FluidEmitter> emitters = List.of(); //generateEdgeEmitters(grid, config.emitterCount, random);
 
         List<RadialFluidEmitter> radialEmitters = List.of(
-                /*
                 new RadialFluidEmitter(
-                        (grid.width + 1) / 2,
-                        (grid.height + 1) / 2,
+                        ((grid.width + 1) / 8) * 7,
+                        (grid.height + 1) / 8,
                         10,
-                        4.0f,
-                        0.08f,
-                        0.9f,
+                        1.2f,
                         0.3f,
-                        0.9f
-                )*/
+                        0.6f,
+                        0.0f,
+                        0.0f
+                ),
+                new RadialFluidEmitter(
+                        ((grid.width + 1) / 8),
+                        ((grid.height + 1) / 8) * 7,
+                        10,
+                        1.2f,
+                        0.3f,
+                        0.0f,
+                        0.6f,
+                        0.0f
+                )
+
         );
 
         List<Vortex> vortexes = List.of(
@@ -140,11 +150,11 @@ public class Main {
                 new Vortex(
                         (grid.width + 1) / 4,
                         (grid.height + 1) / 2,
-                        200,
-                        4000.0f,
-                        20.0f,
-                        1000f
-                ),
+                        5,
+                        1.0f,
+                        1.0f,
+                        5.0f
+                )/*,
                 new Vortex(
                         ((grid.width + 1) / 4) * 3,
                         (grid.height + 1) / 2,
@@ -155,7 +165,31 @@ public class Main {
                 )*/
         );
 
-        FluidSolver solver = new FluidSolver(grid, parameters, sources, emitters, radialEmitters, vortexes);
+
+        List<Wall> walls = List.of(
+                new Wall(
+                        10,
+                        new WallPoint(((grid.width + 1) / 3) * 2, 1),
+                        new WallPoint(((grid.width + 1) / 3) * 2, grid.height / 4)
+                ),
+                new Wall(
+                        10,
+                        new WallPoint(((grid.width + 1) / 3) * 2, (grid.height / 4) * 3),
+                        new WallPoint(((grid.width + 1) / 3) * 2, grid.height)
+                ),
+                new Wall(
+                        10,
+                        new WallPoint((grid.width + 1) / 3, (grid.height / 4) * 3),
+                        new WallPoint((grid.width + 1) / 3, grid.height)
+                ),
+                new Wall(
+                        10,
+                        new WallPoint((grid.width + 1) / 3, 1),
+                        new WallPoint((grid.width + 1) / 3, grid.height / 4)
+                )
+        );
+
+        FluidSolver solver = new FluidSolver(grid, parameters, sources, emitters, radialEmitters, vortexes, walls);
 
         System.out.println("Seed: " + RANDOM_SEED);
         System.out.println("Generated " + emitters.size() + " edge emitters:");
