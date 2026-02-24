@@ -166,26 +166,31 @@ public class Main {
         );
 
 
+        int leftWallX = (grid.width * 3) / 5;
+        int rightWallX = (grid.width * 7) / 10;
+        int gapTopY = (grid.height * 9) / 20;
+        int gapBottomY = (grid.height * 11) / 20;
+
         List<Wall> walls = List.of(
                 new Wall(
                         10,
-                        new WallPoint(((grid.width + 1) / 3) * 2, 1),
-                        new WallPoint(((grid.width + 1) / 3) * 2, grid.height / 4)
+                        new WallPoint(rightWallX, 1),
+                        new WallPoint(rightWallX, gapTopY)
                 ),
                 new Wall(
                         10,
-                        new WallPoint(((grid.width + 1) / 3) * 2, (grid.height / 4) * 3),
-                        new WallPoint(((grid.width + 1) / 3) * 2, grid.height)
+                        new WallPoint(rightWallX, gapBottomY),
+                        new WallPoint(rightWallX, grid.height)
                 ),
                 new Wall(
                         10,
-                        new WallPoint((grid.width + 1) / 3, (grid.height / 4) * 3),
-                        new WallPoint((grid.width + 1) / 3, grid.height)
+                        new WallPoint(leftWallX, gapBottomY),
+                        new WallPoint(leftWallX, grid.height)
                 ),
                 new Wall(
                         10,
-                        new WallPoint((grid.width + 1) / 3, 1),
-                        new WallPoint((grid.width + 1) / 3, grid.height / 4)
+                        new WallPoint(leftWallX, 1),
+                        new WallPoint(leftWallX, gapTopY)
                 )
         );
 
