@@ -14,6 +14,10 @@ public class FluidSolver {
     private List<FluidEmitter> emitters = new ArrayList<>();
     private List<RadialFluidEmitter> radialEmitters = new ArrayList<>();
     private List<Vortex> vortexes = new ArrayList<>();
+    private List<Wall> walls = new ArrayList<>();
+
+    // True for cells occupied by wall geometry
+    private final boolean[] wallMask;
 
     // The fluid grid and parameters for it
     public final FluidGrid grid;
@@ -41,7 +45,7 @@ public class FluidSolver {
             List<FluidSource> densitySources,
             List<FluidEmitter> emitters
     ) {
-        this(grid, parameters, densitySources, emitters, List.of(), List.of());
+        this(grid, parameters, densitySources, emitters, List.of(), List.of(), List.of());
     }
 
     /**
@@ -58,6 +62,21 @@ public class FluidSolver {
             List<RadialFluidEmitter> radialEmitters,
             List<Vortex> vortexes
     ) {
+        this(grid, parameters, densitySources, emitters, radialEmitters, vortexes, List.of());
+    }
+
+    /**
+     * Builds a solver with optional walls that act as internal collision obstacles.
+     */
+    public FluidSolver(
+            FluidGrid grid,
+            SimulationParameters parameters,
+            List<FluidSource> densitySources,
+            List<FluidEmitter> emitters,
+            List<RadialFluidEmitter> radialEmitters,
+            List<Vortex> vortexes,
+            List<Wall> walls
+    ) {
         this.grid = Objects.requireNonNull(grid, "grid must not be null");
         this.parameters = Objects.requireNonNull(parameters, "parameters must not be null");
 
@@ -71,6 +90,7 @@ public class FluidSolver {
 
         this.linearSolver = new LinearSolver(parameters.getLinearSolverIterations());
         this.boundaryHandler = new BoundaryHandler();
+        this.wallMask = new boolean[grid.totalCellCount];
 
         // Null-safe initialization
         this.densitySources = (densitySources != null)
@@ -89,6 +109,10 @@ public class FluidSolver {
                 ? new ArrayList<>(vortexes)
                 : new ArrayList<>();
 
+        this.walls = (walls != null)
+                ? new ArrayList<>(walls)
+                : new ArrayList<>();
+
         for (FluidSource source : this.densitySources) {
             Objects.requireNonNull(source, "density source must not be null");
             validateInBounds(source.gridX, source.gridY, "density source");
@@ -105,6 +129,13 @@ public class FluidSolver {
             Objects.requireNonNull(vortex, "vortex must not be null");
             validateInBounds(vortex.gridX(), vortex.gridY(), "vortex");
         }
+        for (Wall wall : this.walls) {
+            Objects.requireNonNull(wall, "wall must not be null");
+            validateInBounds(wall.startPoint().x(), wall.startPoint().y(), "wall start point");
+            validateInBounds(wall.endPoint().x(), wall.endPoint().y(), "wall end point");
+        }
+
+        rebuildWallMask();
     }
 
 
@@ -116,6 +147,7 @@ public class FluidSolver {
      */
     public void step() {
         addSources();
+        applyWallCollisions();
 
         diffuseVelocity();
         projectVelocity();
@@ -123,6 +155,7 @@ public class FluidSolver {
         advectVelocity();
         applyVorticity();
         projectVelocity();
+        applyWallCollisions();
 
         diffuseDensity(redDensityField);
         diffuseDensity(greenDensityField);
@@ -131,6 +164,8 @@ public class FluidSolver {
         advectDensity(redDensityField);
         advectDensity(greenDensityField);
         advectDensity(blueDensityField);
+
+        applyWallCollisions();
     }
 
     /** Injects density and momentum from configured sources, emitters, and vortexes. */
@@ -675,6 +710,128 @@ public class FluidSolver {
         float lerpX1 = v01 + sx * (v11 - v01);
 
         return lerpX0 + sy * (lerpX1 - lerpX0);
+    }
+
+    /**
+     * Zeros values inside wall cells and prevents velocities from pointing into walls.
+     */
+    private void applyWallCollisions() {
+        if (walls.isEmpty()) {
+            return;
+        }
+
+        for (int y = 1; y <= grid.height; y++) {
+            for (int x = 1; x <= grid.width; x++) {
+                int i = grid.index(x, y);
+                if (wallMask[i]) {
+                    velocityField.readVelocityX[i] = 0.0f;
+                    velocityField.readVelocityY[i] = 0.0f;
+                    redDensityField.readValues[i] = 0.0f;
+                    greenDensityField.readValues[i] = 0.0f;
+                    blueDensityField.readValues[i] = 0.0f;
+                    pressureField.readValues[i] = 0.0f;
+                    divergenceField.readValues[i] = 0.0f;
+                    continue;
+                }
+
+                float vx = velocityField.readVelocityX[i];
+                float vy = velocityField.readVelocityY[i];
+
+                if (wallMask[grid.index(x + 1, y)] && vx > 0.0f) vx = 0.0f;
+                if (wallMask[grid.index(x - 1, y)] && vx < 0.0f) vx = 0.0f;
+                if (wallMask[grid.index(x, y + 1)] && vy > 0.0f) vy = 0.0f;
+                if (wallMask[grid.index(x, y - 1)] && vy < 0.0f) vy = 0.0f;
+
+                velocityField.readVelocityX[i] = vx;
+                velocityField.readVelocityY[i] = vy;
+            }
+        }
+
+        boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.H_VELOCITY, velocityField.readVelocityX, grid);
+        boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.V_VELOCITY, velocityField.readVelocityY, grid);
+        boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.SCALAR, redDensityField.readValues, grid);
+        boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.SCALAR, greenDensityField.readValues, grid);
+        boundaryHandler.applyBoundaries(BoundaryHandler.BoundaryType.SCALAR, blueDensityField.readValues, grid);
+    }
+
+    /** Recomputes the occupancy mask for all configured walls. */
+    private void rebuildWallMask() {
+        for (int i = 0; i < wallMask.length; i++) {
+            wallMask[i] = false;
+        }
+
+        for (Wall wall : walls) {
+            markWallCells(wall);
+        }
+    }
+
+    /** Marks all cells whose centers fall within half wall width of the wall segment. */
+    private void markWallCells(Wall wall) {
+        int x0 = wall.startPoint().x();
+        int y0 = wall.startPoint().y();
+        int x1 = wall.endPoint().x();
+        int y1 = wall.endPoint().y();
+
+        float radius = wall.width() * 0.5f;
+        float radiusSquared = radius * radius;
+
+        int minX = Math.max(1, Math.min(x0, x1) - wall.width());
+        int maxX = Math.min(grid.width, Math.max(x0, x1) + wall.width());
+        int minY = Math.max(1, Math.min(y0, y1) - wall.width());
+        int maxY = Math.min(grid.height, Math.max(y0, y1) + wall.width());
+
+        for (int y = minY; y <= maxY; y++) {
+            for (int x = minX; x <= maxX; x++) {
+                float distSquared = distanceSquaredPointToSegment(x, y, x0, y0, x1, y1);
+                if (distSquared <= radiusSquared) {
+                    wallMask[grid.index(x, y)] = true;
+                }
+            }
+        }
+    }
+
+    private static float distanceSquaredPointToSegment(
+            float pointX,
+            float pointY,
+            float startX,
+            float startY,
+            float endX,
+            float endY
+    ) {
+        float segmentX = endX - startX;
+        float segmentY = endY - startY;
+
+        float segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;
+        if (segmentLengthSquared <= 0.0f) {
+            float dx = pointX - startX;
+            float dy = pointY - startY;
+            return dx * dx + dy * dy;
+        }
+
+        float projection = ((pointX - startX) * segmentX + (pointY - startY) * segmentY) / segmentLengthSquared;
+        float t = clamp(projection, 0.0f, 1.0f);
+
+        float nearestX = startX + t * segmentX;
+        float nearestY = startY + t * segmentY;
+
+        float dx = pointX - nearestX;
+        float dy = pointY - nearestY;
+        return dx * dx + dy * dy;
+    }
+
+    /** Adds a wall and updates collision occupancy. */
+    public void addWall(Wall wall) {
+        Objects.requireNonNull(wall, "wall must not be null");
+        validateInBounds(wall.startPoint().x(), wall.startPoint().y(), "wall start point");
+        validateInBounds(wall.endPoint().x(), wall.endPoint().y(), "wall end point");
+        walls.add(wall);
+        rebuildWallMask();
+    }
+
+    /** True when a simulation cell is occupied by wall geometry. */
+    public boolean isWallCell(int x, int y) {
+        validateInBounds(x, y, "cell");
+        return wallMask[grid.index(x, y)];
     }
 
     /** Registers an additional point density source during runtime */
