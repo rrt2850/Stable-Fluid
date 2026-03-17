@@ -105,7 +105,11 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
      */
     private static float swirlWeight(float distance, int effectiveRadius) {
         float normalizedDistance = distance / effectiveRadius;
-        return Math.max(0.0f, 1.0f - normalizedDistance);
+
+        // Keep tangential motion strongest around the middle of the vortex and
+        // weaker at the boundary so particles are less likely to orbit outside.
+        float edgeToCenter = Math.max(0.0f, 1.0f - normalizedDistance);
+        return normalizedDistance * edgeToCenter;
     }
 
     /**
@@ -115,7 +119,8 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
         float normalizedDistance = distance / effectiveRadius;
         float centerProximity = Math.max(0.0f, 1.0f - normalizedDistance);
 
-        // Squared falloff creates a smoother gradient near the outer radius while remaining strongest at center.
-        return centerProximity * centerProximity;
+        // Keep a non-zero pull near the edge so trajectories spiral inward
+        // instead of settling into mostly circular orbits.
+        return 0.2f + 0.8f * centerProximity;
     }
 }
