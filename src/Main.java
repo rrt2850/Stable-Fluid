@@ -1,4 +1,9 @@
 import javax.imageio.ImageIO;
+import javax.swing.ImageIcon;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.SwingUtilities;
+import java.awt.GraphicsEnvironment;
 import java.awt.Toolkit;
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -223,7 +228,14 @@ public class Main {
 
         boolean takeIntermittentSnapshots = config.simulationSteps >= INTERMITTENT_SNAPSHOT_INTERVAL;
         Path tempFramesDirectory = null;
+        SimulationPreviewWindow previewWindow = null;
         try {
+            if (!GraphicsEnvironment.isHeadless()) {
+                previewWindow = new SimulationPreviewWindow(grid.width, grid.height);
+            } else {
+                System.out.println("Skipped live preview window because the environment is headless.");
+            }
+
             if (config.exportVideo) {
                 tempFramesDirectory = Files.createTempDirectory("stable-fluid-frames-");
             }
@@ -231,21 +243,28 @@ public class Main {
             for (int step = 1; step <= config.simulationSteps; step++) {
                 solver.step();
 
-                // ---------------------------------------------------------------------
-                // MP4 video frames (simulation resolution, fast)
-                // ---------------------------------------------------------------------
-                if (config.exportVideo) {
-                    BufferedImage videoFrame = createDensityImage(
+                BufferedImage simulationResolutionFrame = null;
+                if (config.exportVideo || previewWindow != null) {
+                    simulationResolutionFrame = createDensityImage(
                             grid,
                             solver,
                             grid.width,
                             grid.height
                     );
+                }
 
+                // ---------------------------------------------------------------------
+                // MP4 video frames (simulation resolution, fast)
+                // ---------------------------------------------------------------------
+                if (config.exportVideo) {
                     Path framePath = tempFramesDirectory.resolve(
                             String.format("frame-%05d.png", step - 1)
                     );
-                    saveImage(videoFrame, framePath.toString());
+                    saveImage(simulationResolutionFrame, framePath.toString());
+                }
+
+                if (previewWindow != null) {
+                    previewWindow.update(simulationResolutionFrame, step);
                 }
 
                 // ---------------------------------------------------------------------
@@ -293,6 +312,9 @@ public class Main {
         } catch (IOException exception) {
             throw new RuntimeException("Failed to create temporary frame directory.", exception);
         } finally {
+            if (previewWindow != null) {
+                previewWindow.close();
+            }
             if (tempFramesDirectory != null) {
                 deleteDirectoryRecursively(tempFramesDirectory.toFile());
             }
@@ -323,7 +345,14 @@ public class Main {
         boolean exportVideo = parseBoolean(args, 4, false, "export video");
         boolean logEveryStep = parseBoolean(args, 5, false, "log every step");
 
-        return new SimulationConfig(gridWidth, gridHeight, emitterCount, simulationSteps, exportVideo, logEveryStep);
+        return new SimulationConfig(
+                gridWidth,
+                gridHeight,
+                emitterCount,
+                simulationSteps,
+                exportVideo,
+                logEveryStep
+        );
     }
 
     /**
@@ -723,6 +752,56 @@ public class Main {
             boolean exportVideo,
             boolean logEveryStep
     ) {}
+
+    /**
+     * Small Swing window for displaying the latest simulation frame while the solver runs.
+     */
+    private static final class SimulationPreviewWindow {
+        private final JFrame frame;
+        private final JLabel imageLabel;
+
+        private SimulationPreviewWindow(int width, int height) {
+            try {
+                final JFrame[] holder = new JFrame[1];
+                final JLabel[] labelHolder = new JLabel[1];
+                SwingUtilities.invokeAndWait(() -> {
+                    JFrame previewFrame = new JFrame("Stable Fluid - Live Preview");
+                    JLabel previewLabel = new JLabel();
+                    previewLabel.setPreferredSize(new java.awt.Dimension(width, height));
+                    previewFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+                    previewFrame.setContentPane(previewLabel);
+                    previewFrame.pack();
+                    previewFrame.setLocationByPlatform(true);
+                    previewFrame.setVisible(true);
+                    holder[0] = previewFrame;
+                    labelHolder[0] = previewLabel;
+                });
+                this.frame = holder[0];
+                this.imageLabel = labelHolder[0];
+            } catch (Exception exception) {
+                throw new RuntimeException("Failed to initialize preview window.", exception);
+            }
+        }
+
+        private void update(BufferedImage image, int step) {
+            if (image == null) {
+                return;
+            }
+
+            SwingUtilities.invokeLater(() -> {
+                imageLabel.setIcon(new ImageIcon(image));
+                frame.setTitle("Stable Fluid - Live Preview (Step " + step + ")");
+            });
+        }
+
+        private void close() {
+            try {
+                SwingUtilities.invokeAndWait(frame::dispose);
+            } catch (Exception exception) {
+                throw new RuntimeException("Failed to close preview window cleanly.", exception);
+            }
+        }
+    }
 
     /**
      * Determines whether an emission angle is valid for a given wall.
