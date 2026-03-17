@@ -16,7 +16,7 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
     /**
      * Pulls velocity inward while adding sideways spin to create a whirlpool effect
      */
-    public void applyVelocity(VectorField velocity, FluidGrid grid, float timeStepSeconds) {
+    public void applyVelocity(VectorField velocity, FluidGrid grid) {
         if (!grid.inBounds(gridX, gridY)) {
             throw new IllegalArgumentException("vortex out of bounds: (" + gridX + ", " + gridY + ")");
         }
@@ -49,8 +49,8 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
                 float tangentX = dy / distance;
                 float tangentY = -dx / distance;
 
-                float pullStrength = suctionStrength * suctionWeight * timeStepSeconds;
-                float spinStrength = swirlStrength * swirlWeight * timeStepSeconds;
+                float pullStrength = suctionStrength * suctionWeight;
+                float spinStrength = swirlStrength * swirlWeight;
 
                 int index = grid.index(x, y);
                 velocity.readVelocityX[index] += directionToCenterX * pullStrength + tangentX * spinStrength;
