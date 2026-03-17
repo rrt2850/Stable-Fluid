@@ -55,6 +55,10 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
                     continue;
                 }
 
+                if (isOccludedByWall(x, y, grid, wallMask)) {
+                    continue;
+                }
+
                 float distance = (float) Math.sqrt(distSquared);
                 float suctionWeight = suctionWeight(distance, effectiveRadius);
                 int index = grid.index(x, y);
@@ -152,5 +156,49 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
         // Keep a non-zero pull near the edge so trajectories spiral inward
         // instead of settling into mostly circular orbits.
         return 0.2f + 0.8f * centerProximity;
+    }
+
+    /**
+     * True when a wall lies between the vortex center and the target cell.
+     *
+     * <p>Uses a Bresenham walk across grid cells so vortex forces cannot pass
+     * through wall tiles but can still bend around wall gaps via advection.</p>
+     */
+    private boolean isOccludedByWall(int targetX, int targetY, FluidGrid grid, boolean[] wallMask) {
+        if (wallMask == null || wallMask.length == 0) {
+            return false;
+        }
+
+        int x = gridX;
+        int y = gridY;
+        int dx = Math.abs(targetX - x);
+        int dy = Math.abs(targetY - y);
+        int stepX = Integer.compare(targetX, x);
+        int stepY = Integer.compare(targetY, y);
+
+        int error = dx - dy;
+
+        while (x != targetX || y != targetY) {
+            int doubledError = error * 2;
+
+            if (doubledError > -dy) {
+                error -= dy;
+                x += stepX;
+            }
+            if (doubledError < dx) {
+                error += dx;
+                y += stepY;
+            }
+
+            if (!grid.inBounds(x, y)) {
+                return true;
+            }
+
+            if (wallMask[grid.index(x, y)]) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
