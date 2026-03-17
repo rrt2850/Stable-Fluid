@@ -169,7 +169,8 @@ public class Main {
                         100,
                         7.0f,
                         2.0f,
-                        6.0f
+                        6.0f,
+                        1
                 )/*,
                 new Vortex(
                         ((grid.width + 1) / 4) * 3,
@@ -177,7 +178,8 @@ public class Main {
                         200,
                         4000.0f,
                         20.0f,
-                        1000f
+                        1000f,
+                        -1
                 )*/
         );
 
