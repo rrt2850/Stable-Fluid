@@ -15,9 +15,18 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
     private static final int MIN_RADIUS = 1;
 
     /**
-     * Pulls velocity inward while adding sideways spin to create a whirlpool effect
+     * Applies vortex influence in one pass (velocity + all 3 density channels)
+     * to avoid repeated wall-occlusion ray checks.
      */
-    public void applyVelocity(VectorField velocity, FluidGrid grid, float timeStepSeconds) {
+    public void applyInfluence(
+            VectorField velocity,
+            ScalarField redDensity,
+            ScalarField greenDensity,
+            ScalarField blueDensity,
+            FluidGrid grid,
+            float timeStepSeconds,
+            boolean[] wallMask
+    ) {
         if (!grid.inBounds(gridX, gridY)) {
             throw new IllegalArgumentException("vortex out of bounds: (" + gridX + ", " + gridY + ")");
         }
@@ -38,14 +47,28 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
                 }
 
                 float distSquared = dx * dx + dy * dy;
-                if (distSquared == 0.0f || distSquared > radiusSquared) {
+                if (distSquared > radiusSquared) {
+                    continue;
+                }
+
+                if (isOccludedByWall(x, y, grid, wallMask)) {
                     continue;
                 }
 
                 float distance = (float) Math.sqrt(distSquared);
                 float suctionWeight = suctionWeight(distance, effectiveRadius);
-                float swirlWeight = swirlWeight(distance, effectiveRadius);
+                int index = grid.index(x, y);
 
+                float removedDensity = absorptionRate * timeStepSeconds * suctionWeight;
+                redDensity.readValues[index] = Math.max(0.0f, redDensity.readValues[index] - removedDensity);
+                greenDensity.readValues[index] = Math.max(0.0f, greenDensity.readValues[index] - removedDensity);
+                blueDensity.readValues[index] = Math.max(0.0f, blueDensity.readValues[index] - removedDensity);
+
+                if (distSquared == 0.0f) {
+                    continue;
+                }
+
+                float swirlWeight = swirlWeight(distance, effectiveRadius);
                 float directionToCenterX = -dx / distance;
                 float directionToCenterY = -dy / distance;
 
@@ -57,7 +80,6 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
                 float pullStrength = suctionStrength * suctionWeight * timeStepSeconds;
                 float spinStrength = swirlStrength * swirlWeight * timeStepSeconds;
 
-                int index = grid.index(x, y);
                 velocity.readVelocityX[index] += directionToCenterX * pullStrength + tangentX * spinStrength * swirlDirection;
                 velocity.readVelocityY[index] += directionToCenterY * pullStrength + tangentY * spinStrength * swirlDirection;
             }
@@ -65,40 +87,48 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
     }
 
     /**
-     * Removes density near the vortex center so material appears to be swallowed
+     * True when a wall lies between the vortex center and the target cell.
+     *
+     * <p>Uses a Bresenham walk across grid cells so vortex forces cannot pass
+     * through wall tiles but can still bend around wall gaps via advection.</p>
      */
-    public void absorbDensity(ScalarField densityField, FluidGrid grid, float timeStepSeconds) {
-        if (!grid.inBounds(gridX, gridY)) {
-            throw new IllegalArgumentException("vortex out of bounds: (" + gridX + ", " + gridY + ")");
+    private boolean isOccludedByWall(int targetX, int targetY, FluidGrid grid, boolean[] wallMask) {
+        if (wallMask == null || wallMask.length == 0) {
+            return false;
         }
 
-        int effectiveRadius = Math.max(radius, MIN_RADIUS);
-        float radiusSquared = effectiveRadius * effectiveRadius;
+        int x = gridX;
+        int y = gridY;
+        int dx = Math.abs(targetX - x);
+        int dy = Math.abs(targetY - y);
+        int stepX = Integer.compare(targetX, x);
+        int stepY = Integer.compare(targetY, y);
 
-        for (int dy = -effectiveRadius; dy <= effectiveRadius; dy++) {
-            for (int dx = -effectiveRadius; dx <= effectiveRadius; dx++) {
-                int x = gridX + dx;
-                int y = gridY + dy;
+        int error = dx - dy;
 
-                if (!grid.inBounds(x, y)) {
-                    continue;
-                }
+        while (x != targetX || y != targetY) {
+            int doubledError = error * 2;
 
-                float distSquared = dx * dx + dy * dy;
-                if (distSquared > radiusSquared) {
-                    continue;
-                }
+            if (doubledError > -dy) {
+                error -= dy;
+                x += stepX;
+            }
+            if (doubledError < dx) {
+                error += dx;
+                y += stepY;
+            }
 
-                float distance = (float) Math.sqrt(distSquared);
-                float weight = suctionWeight(distance, effectiveRadius);
-                float removedDensity = absorptionRate * timeStepSeconds * weight;
+            if (!grid.inBounds(x, y)) {
+                return true;
+            }
 
-                int index = grid.index(x, y);
-                densityField.readValues[index] = Math.max(0.0f, densityField.readValues[index] - removedDensity);
+            if (wallMask[grid.index(x, y)]) {
+                return true;
             }
         }
-    }
 
+        return false;
+    }
 
     /**
      * Keeps visible swirl across the vortex while still tapering at the boundary.
