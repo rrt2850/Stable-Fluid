@@ -39,7 +39,8 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
                 }
 
                 float distance = (float) Math.sqrt(distSquared);
-                float weight = 1.0f - (distance / effectiveRadius);
+                float suctionWeight = suctionWeight(distance, effectiveRadius);
+                float swirlWeight = swirlWeight(distance, effectiveRadius);
 
                 float directionToCenterX = -dx / distance;
                 float directionToCenterY = -dy / distance;
@@ -48,8 +49,8 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
                 float tangentX = dy / distance;
                 float tangentY = -dx / distance;
 
-                float pullStrength = suctionStrength * weight * timeStepSeconds;
-                float spinStrength = swirlStrength * weight * timeStepSeconds;
+                float pullStrength = suctionStrength * suctionWeight * timeStepSeconds;
+                float spinStrength = swirlStrength * swirlWeight * timeStepSeconds;
 
                 int index = grid.index(x, y);
                 velocity.readVelocityX[index] += directionToCenterX * pullStrength + tangentX * spinStrength;
@@ -84,12 +85,32 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
                 }
 
                 float distance = (float) Math.sqrt(distSquared);
-                float weight = 1.0f - (distance / effectiveRadius);
+                float weight = suctionWeight(distance, effectiveRadius);
                 float removedDensity = absorptionRate * timeStepSeconds * weight;
 
                 int index = grid.index(x, y);
                 densityField.readValues[index] = Math.max(0.0f, densityField.readValues[index] - removedDensity);
             }
         }
+    }
+
+
+    /**
+     * Keeps visible swirl across the vortex while still tapering at the boundary.
+     */
+    private static float swirlWeight(float distance, int effectiveRadius) {
+        float normalizedDistance = distance / effectiveRadius;
+        return Math.max(0.0f, 1.0f - normalizedDistance);
+    }
+
+    /**
+     * Creates a radial falloff where suction starts weak near the edge and grows toward the center.
+     */
+    private static float suctionWeight(float distance, int effectiveRadius) {
+        float normalizedDistance = distance / effectiveRadius;
+        float centerProximity = Math.max(0.0f, 1.0f - normalizedDistance);
+
+        // Squared falloff creates a smoother gradient near the outer radius while remaining strongest at center.
+        return centerProximity * centerProximity;
     }
 }
