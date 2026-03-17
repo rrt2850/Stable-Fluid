@@ -209,10 +209,10 @@ public class FluidSolver {
             if (!grid.inBounds(vortex.gridX(), vortex.gridY())) {
                 continue;
             }
-            vortex.applyVelocity(velocityField, grid, dt);
-            vortex.absorbDensity(redDensityField, grid, dt);
-            vortex.absorbDensity(greenDensityField, grid, dt);
-            vortex.absorbDensity(blueDensityField, grid, dt);
+            vortex.applyVelocity(velocityField, grid, dt, wallMask);
+            vortex.absorbDensity(redDensityField, grid, dt, wallMask);
+            vortex.absorbDensity(greenDensityField, grid, dt, wallMask);
+            vortex.absorbDensity(blueDensityField, grid, dt, wallMask);
         }
     }
 
