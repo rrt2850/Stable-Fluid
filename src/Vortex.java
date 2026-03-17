@@ -7,9 +7,10 @@
  * @param suctionStrength   Inward pull magnitude applied to velocity per second
  * @param absorptionRate    Density removed per second near the center
  * @param swirlStrength     Tangential spin strength for whirlpool-like circular flow per second
+ * @param swirlDirection    Spin orientation, use 1 for clockwise and -1 for counterclockwise
  */
 public record Vortex(int gridX, int gridY, int radius, float suctionStrength, float absorptionRate,
-                     float swirlStrength) {
+                     float swirlStrength, int swirlDirection) {
 
     private static final int MIN_RADIUS = 1;
 
@@ -19,6 +20,9 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
     public void applyVelocity(VectorField velocity, FluidGrid grid, float timeStepSeconds) {
         if (!grid.inBounds(gridX, gridY)) {
             throw new IllegalArgumentException("vortex out of bounds: (" + gridX + ", " + gridY + ")");
+        }
+        if (swirlDirection != 1 && swirlDirection != -1) {
+            throw new IllegalArgumentException("swirlDirection must be 1 (clockwise) or -1 (counterclockwise)");
         }
 
         int effectiveRadius = Math.max(radius, MIN_RADIUS);
@@ -54,8 +58,8 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
                 float spinStrength = swirlStrength * swirlWeight * timeStepSeconds;
 
                 int index = grid.index(x, y);
-                velocity.readVelocityX[index] += directionToCenterX * pullStrength + tangentX * spinStrength;
-                velocity.readVelocityY[index] += directionToCenterY * pullStrength + tangentY * spinStrength;
+                velocity.readVelocityX[index] += directionToCenterX * pullStrength + tangentX * spinStrength * swirlDirection;
+                velocity.readVelocityY[index] += directionToCenterY * pullStrength + tangentY * spinStrength * swirlDirection;
             }
         }
     }
