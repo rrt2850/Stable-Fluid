@@ -17,7 +17,7 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
     /**
      * Pulls velocity inward while adding sideways spin to create a whirlpool effect
      */
-    public void applyVelocity(VectorField velocity, FluidGrid grid, float timeStepSeconds) {
+    public void applyVelocity(VectorField velocity, FluidGrid grid, float timeStepSeconds, boolean[] wallMask) {
         if (!grid.inBounds(gridX, gridY)) {
             throw new IllegalArgumentException("vortex out of bounds: (" + gridX + ", " + gridY + ")");
         }
@@ -39,6 +39,10 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
 
                 float distSquared = dx * dx + dy * dy;
                 if (distSquared == 0.0f || distSquared > radiusSquared) {
+                    continue;
+                }
+
+                if (isOccludedByWall(x, y, grid, wallMask)) {
                     continue;
                 }
 
@@ -67,7 +71,7 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
     /**
      * Removes density near the vortex center so material appears to be swallowed
      */
-    public void absorbDensity(ScalarField densityField, FluidGrid grid, float timeStepSeconds) {
+    public void absorbDensity(ScalarField densityField, FluidGrid grid, float timeStepSeconds, boolean[] wallMask) {
         if (!grid.inBounds(gridX, gridY)) {
             throw new IllegalArgumentException("vortex out of bounds: (" + gridX + ", " + gridY + ")");
         }
@@ -86,6 +90,10 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
 
                 float distSquared = dx * dx + dy * dy;
                 if (distSquared > radiusSquared) {
+                    continue;
+                }
+
+                if (isOccludedByWall(x, y, grid, wallMask)) {
                     continue;
                 }
 
@@ -122,5 +130,49 @@ public record Vortex(int gridX, int gridY, int radius, float suctionStrength, fl
         // Keep a non-zero pull near the edge so trajectories spiral inward
         // instead of settling into mostly circular orbits.
         return 0.2f + 0.8f * centerProximity;
+    }
+
+    /**
+     * True when a wall lies between the vortex center and the target cell.
+     *
+     * <p>Uses a Bresenham walk across grid cells so vortex forces cannot pass
+     * through wall tiles but can still bend around wall gaps via advection.</p>
+     */
+    private boolean isOccludedByWall(int targetX, int targetY, FluidGrid grid, boolean[] wallMask) {
+        if (wallMask == null || wallMask.length == 0) {
+            return false;
+        }
+
+        int x = gridX;
+        int y = gridY;
+        int dx = Math.abs(targetX - x);
+        int dy = Math.abs(targetY - y);
+        int stepX = Integer.compare(targetX, x);
+        int stepY = Integer.compare(targetY, y);
+
+        int error = dx - dy;
+
+        while (x != targetX || y != targetY) {
+            int doubledError = error * 2;
+
+            if (doubledError > -dy) {
+                error -= dy;
+                x += stepX;
+            }
+            if (doubledError < dx) {
+                error += dx;
+                y += stepY;
+            }
+
+            if (!grid.inBounds(x, y)) {
+                return true;
+            }
+
+            if (wallMask[grid.index(x, y)]) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
