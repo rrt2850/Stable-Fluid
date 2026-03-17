@@ -101,7 +101,6 @@ public class Main {
         SimulationConfig config = parseConfig(args);
 
         // Makes a new fluid grid
-        // TODO: Figure out a way to get cellSize that's not biased towards square resolutions
         FluidGrid grid = new FluidGrid(
                 config.gridWidth,
                 config.gridHeight,
@@ -126,34 +125,46 @@ public class Main {
                         ((grid.width + 1) / 8) * 7,
                         (grid.height + 1) / 8,
                         10,
-                        1.2f,
-                        0.3f,
-                        0.6f,
-                        0.0f,
-                        0.0f
+                        0.5f,
+                        0.5f,
+                        248f/255f, 248f/255f, 56f/255f
                 ),
                 new RadialFluidEmitter(
                         ((grid.width + 1) / 8),
                         ((grid.height + 1) / 8) * 7,
                         10,
-                        1.2f,
+                        0.5f,
+                        0.5f,
+                        221f / 255f, 74f / 255f, 225f/ 255f
+                ),
+                new RadialFluidEmitter(
+                        ((grid.width + 1) / 2),
+                        ((grid.height + 1) / 8) * 7,
+                        7,
+                        0.4f,
                         0.3f,
-                        0.0f,
-                        0.6f,
-                        0.0f
+                        3f / 255f, 525f / 255f, 19f/ 255f
+                ),
+                new RadialFluidEmitter(
+                        ((grid.width + 1) / 2),
+                        ((grid.height + 1) / 8),
+                        7,
+                        0.4f,
+                        0.3f,
+                        7f / 255f, 231f / 255f, 242f/ 255f
                 )
 
         );
 
         List<Vortex> vortexes = List.of(
-                /*
+
                 new Vortex(
-                        (grid.width + 1) / 4,
+                        (grid.width + 1) / 2,
                         (grid.height + 1) / 2,
-                        5,
-                        1.0f,
-                        1.0f,
-                        5.0f
+                        100,
+                        7.0f,
+                        2.0f,
+                        6.0f
                 )/*,
                 new Vortex(
                         ((grid.width + 1) / 4) * 3,
@@ -165,32 +176,35 @@ public class Main {
                 )*/
         );
 
+        int leftWallX = (grid.width + 1) / 3;
+        int rightWallX = ((grid.width + 1) / 3) * 2;
 
-        int leftWallX = (grid.width * 3) / 5;
-        int rightWallX = (grid.width * 7) / 10;
-        int gapTopY = (grid.height * 9) / 20;
-        int gapBottomY = (grid.height * 11) / 20;
+        int rightGapTop = (grid.height / 10) * 1;
+        int rightGapBottom = (grid.height/ 10) * 3;
+
+        int leftGapTop = (grid.height / 10) * 7;
+        int leftGapBottom = (grid.height / 10) * 9;
 
         List<Wall> walls = List.of(
                 new Wall(
-                        10,
+                        20,
                         new WallPoint(rightWallX, 1),
-                        new WallPoint(rightWallX, gapTopY)
+                        new WallPoint(rightWallX, leftGapTop)
                 ),
                 new Wall(
-                        10,
-                        new WallPoint(rightWallX, gapBottomY),
+                        20,
+                        new WallPoint(rightWallX, leftGapBottom),
                         new WallPoint(rightWallX, grid.height)
                 ),
                 new Wall(
-                        10,
-                        new WallPoint(leftWallX, gapBottomY),
-                        new WallPoint(leftWallX, grid.height)
+                        20,
+                        new WallPoint(leftWallX, 1),
+                        new WallPoint(leftWallX, rightGapTop)
                 ),
                 new Wall(
-                        10,
-                        new WallPoint(leftWallX, 1),
-                        new WallPoint(leftWallX, gapTopY)
+                        20,
+                        new WallPoint(leftWallX, rightGapBottom),
+                        new WallPoint(leftWallX, grid.height)
                 )
         );
 

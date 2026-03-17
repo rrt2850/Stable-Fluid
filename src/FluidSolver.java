@@ -226,10 +226,11 @@ public class FluidSolver {
         // Larger values make momentum blur across neighbors more each step
         float spreadStrength = timeStep * viscosity / (grid.cellSize * grid.cellSize);
 
+        // TODO: See if I should be multiplying by spreadstrength here
         // Each Jacobi update divides by (centerWeight + 4 neighbor weights).
         float normalizationValue = 1.0f + 4.0f * spreadStrength;
 
-        // Solve horizontal and vertical velocities so each cell is smoothed with it's neighbors
+        // Solve horizontal and vertical velocities so each cell is smoothed with its neighbors
         linearSolver.solve(
                 BoundaryHandler.BoundaryType.H_VELOCITY,
                 velocityField.writeVelocityX,
