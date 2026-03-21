@@ -14,6 +14,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import static java.lang.Math.clamp;
 
 /**
  * Entry point for the fluid simulation
@@ -23,62 +24,6 @@ import java.util.Random;
  * can follow the pipeline from command-line arguments to rendered output.</p>
  */
 public class Main {
-    // Fluid properties
-    private static final float DEFAULT_DENSITY_RATE = 1.2f;
-    private static final float MIN_EMISSION_SPEED = 0.7f;
-    private static final float MAX_EMISSION_SPEED = 1.1f;
-    private static final float TIMESTEP = 0.020f;
-    private static final float VISCOSITY = 0.0000001f;
-    private static final float DIFFUSION_RATE = 0.000006f;
-    private static final int SOLVER_ITERATIONS = 25;
-    private static final float VORTICITY_CONFINEMENT = 10.0f;
-
-    private static final int DEFAULT_SIMULATION_STEPS = 100;
-    private static final int DEFAULT_EMITTER_COUNT = 12;
-
-    // Defaults for PowerShell runner
-    private static final int DEFAULT_GRID_WIDTH = 800;
-    private static final int DEFAULT_GRID_HEIGHT = 400;
-
-    // Final still export resolution (upscaled from sim)
-    private static final int FINAL_STILL_WIDTH = 2400;
-    private static final int FINAL_STILL_HEIGHT = 1200;
-
-    private static final int MP4_FRAMES_PER_SECOND = 30;
-    private static final int INTERMITTENT_SNAPSHOT_INTERVAL = 25;
-
-    private static final long RANDOM_SEED = System.currentTimeMillis();
-
-    // Emitter settings
-    private static final float EMITTER_RADIUS_RATIO = 0.012f;
-    private static final int MIN_EMITTER_RADIUS = 8;
-    private static final int MAX_EMITTER_RADIUS = 60;
-    private static final float EMITTER_ANGLE_VARIATION_DEGREES = 60.0f;
-    private static final float WALL_TANGENT_EXCLUSION = 10f;
-    private static final float CORNER_EXCLUSION = 5f;
-
-    // Good seeds :)
-    // 1771389195668L
-    // 1771400966868L
-    // 1771402741333L
-    // 1771453995487L
-
-    // 12 namespace colors represented as RGB triplets in the [0, 1] range.
-    private static final float[][] NAMESPACE_COLORS = {
-            {0.0f, 0.69f, 0.94f},
-            {0.0f, 0.78f, 0.58f},
-            {0.55f, 0.80f, 0.26f},
-            {0.98f, 0.82f, 0.20f},
-            {1.0f, 0.63f, 0.0f},
-            {0.95f, 0.36f, 0.20f},
-            {0.87f, 0.22f, 0.52f},
-            {0.67f, 0.27f, 0.87f},
-            {0.31f, 0.42f, 0.94f},
-            {0.18f, 0.68f, 0.98f},
-            {0.0f, 0.73f, 0.75f},
-            {0.42f, 0.75f, 0.45f}
-    };
-
     /**
      * Program entry point
      *
@@ -113,48 +58,64 @@ public class Main {
         );
 
         SimulationParameters parameters = new SimulationParameters(
-                TIMESTEP,
-                VISCOSITY,
-                DIFFUSION_RATE,
-                SOLVER_ITERATIONS,
-                VORTICITY_CONFINEMENT
+                Constants.TIMESTEP,
+                Constants.VISCOSITY,
+                Constants.DIFFUSION_RATE,
+                Constants.SOLVER_ITERATIONS,
+                Constants.VORTICITY_CONFINEMENT
         );
 
         List<FluidSource> sources = List.of();
 
-        Random random = new Random(RANDOM_SEED);
+        Random random = new Random(Constants.RANDOM_SEED);
         List<FluidEmitter> emitters = List.of(); //generateEdgeEmitters(grid, config.emitterCount, random);
 
         List<RadialFluidEmitter> radialEmitters = List.of(
                 new RadialFluidEmitter(
                         ((grid.width + 1) / 8) * 7,
                         (grid.height + 1) / 8,
-                        10,
-                        0.5f,
+                        20,
+                        1.5f,
                         0.5f,
                         248f/255f, 248f/255f, 56f/255f
                 ),
                 new RadialFluidEmitter(
                         ((grid.width + 1) / 8),
                         ((grid.height + 1) / 8) * 7,
-                        10,
+                        20,
+                        1.5f,
                         0.5f,
+                        221f / 255f, 74f / 255f, 225f/ 255f
+                ),
+                new RadialFluidEmitter(
+                        ((grid.width + 1) / 8) * 7,
+                        ((grid.height + 1) / 8) * 7,
+                        20,
+                        1.5f,
+                        0.5f,
+                        248f/255f, 248f/255f, 56f/255f
+                ),
+                new RadialFluidEmitter(
+                        ((grid.width + 1) / 8),
+                        (grid.height + 1) / 8,
+                        20,
+                        1.5f,
                         0.5f,
                         221f / 255f, 74f / 255f, 225f/ 255f
                 ),
                 new RadialFluidEmitter(
                         ((grid.width + 1) / 2),
                         ((grid.height + 1) / 8) * 7,
-                        7,
-                        0.4f,
+                        9,
+                        0.6f,
                         0.3f,
                         3f / 255f, 525f / 255f, 19f/ 255f
                 ),
                 new RadialFluidEmitter(
                         ((grid.width + 1) / 2),
                         ((grid.height + 1) / 8),
-                        7,
-                        0.4f,
+                        9,
+                        0.6f,
                         0.3f,
                         7f / 255f, 231f / 255f, 242f/ 255f
                 )
@@ -166,11 +127,11 @@ public class Main {
                 new Vortex(
                         (grid.width + 1) / 2,
                         (grid.height + 1) / 2,
-                        100,
-                        7.0f,
-                        2.0f,
-                        6.0f,
-                        1
+                        grid.width / 3,
+                        0.15f,
+                        0.00001f,
+                        0.1f,
+                        -1
                 )/*,
                 new Vortex(
                         ((grid.width + 1) / 4) * 3,
@@ -178,38 +139,37 @@ public class Main {
                         200,
                         4000.0f,
                         20.0f,
-                        1000f,
-                        -1
+                        1000f
                 )*/
         );
 
-        int leftWallX = (grid.width + 1) / 3;
-        int rightWallX = ((grid.width + 1) / 3) * 2;
+        int leftWallX = (grid.width + 1) / 4;
+        int rightWallX = ((grid.width + 1) / 4) * 3;
 
-        int rightGapTop = (grid.height / 10) * 1;
-        int rightGapBottom = (grid.height/ 10) * 3;
+        int rightGapTop = (grid.height / 10) * 4;
+        int rightGapBottom = (grid.height/ 10) * 6;
 
-        int leftGapTop = (grid.height / 10) * 7;
-        int leftGapBottom = (grid.height / 10) * 9;
+        int leftGapTop = (grid.height / 10) * 4;
+        int leftGapBottom = (grid.height / 10) * 6;
 
         List<Wall> walls = List.of(
                 new Wall(
-                        20,
+                        40,
                         new WallPoint(rightWallX, 1),
                         new WallPoint(rightWallX, leftGapTop)
                 ),
                 new Wall(
-                        20,
+                        40,
                         new WallPoint(rightWallX, leftGapBottom),
                         new WallPoint(rightWallX, grid.height)
                 ),
                 new Wall(
-                        20,
+                        40,
                         new WallPoint(leftWallX, 1),
                         new WallPoint(leftWallX, rightGapTop)
                 ),
                 new Wall(
-                        20,
+                        40,
                         new WallPoint(leftWallX, rightGapBottom),
                         new WallPoint(leftWallX, grid.height)
                 )
@@ -217,7 +177,7 @@ public class Main {
 
         FluidSolver solver = new FluidSolver(grid, parameters, sources, emitters, radialEmitters, vortexes, walls);
 
-        System.out.println("Seed: " + RANDOM_SEED);
+        System.out.println("Seed: " + Constants.RANDOM_SEED);
         System.out.println("Generated " + emitters.size() + " edge emitters:");
 
         // Go into each emitter and convert the rgb values to 255 instead of 0-1
@@ -242,7 +202,7 @@ public class Main {
         System.out.println("Configured " + radialEmitters.size() + " radial emitters and "
                 + vortexes.size() + " vortex emitters.");
 
-        boolean takeIntermittentSnapshots = config.simulationSteps >= INTERMITTENT_SNAPSHOT_INTERVAL;
+        boolean takeIntermittentSnapshots = config.simulationSteps >= Constants.INTERMITTENT_SNAPSHOT_INTERVAL;
         Path tempFramesDirectory = null;
         SimulationPreviewWindow previewWindow = null;
         try {
@@ -261,7 +221,7 @@ public class Main {
 
                 BufferedImage simulationResolutionFrame = null;
                 if (config.exportVideo || previewWindow != null) {
-                    simulationResolutionFrame = createDensityImage(
+                    simulationResolutionFrame = ImageRenderer.createDensityImage(
                             grid,
                             solver,
                             grid.width,
@@ -276,7 +236,7 @@ public class Main {
                     Path framePath = tempFramesDirectory.resolve(
                             String.format("frame-%05d.png", step - 1)
                     );
-                    saveImage(simulationResolutionFrame, framePath.toString());
+                    ImageRenderer.saveImage(simulationResolutionFrame, framePath.toString());
                 }
 
                 if (previewWindow != null) {
@@ -286,18 +246,18 @@ public class Main {
                 // ---------------------------------------------------------------------
                 // Intermittent snapshots (UPSCALED, high quality)
                 // ---------------------------------------------------------------------
-                if (takeIntermittentSnapshots && step % INTERMITTENT_SNAPSHOT_INTERVAL == 0) {
-                    BufferedImage snapshotImage = createDensityImage(
+                if (takeIntermittentSnapshots && step % Constants.INTERMITTENT_SNAPSHOT_INTERVAL == 0) {
+                    BufferedImage snapshotImage = ImageRenderer.createDensityImage(
                             grid,
                             solver,
-                            FINAL_STILL_WIDTH,
-                            FINAL_STILL_HEIGHT
+                            Constants.FINAL_STILL_WIDTH,
+                            Constants.FINAL_STILL_HEIGHT
                     );
 
                     String intermittentPath =
                             String.format("./results/density-step-%05d.png", step);
 
-                    saveImage(snapshotImage, intermittentPath);
+                    ImageRenderer.saveImage(snapshotImage, intermittentPath);
                     System.out.println("Saved intermittent density image to " + intermittentPath);
                 }
 
@@ -311,7 +271,7 @@ public class Main {
             System.out.println("Simulation ran. Center density=" + centerDensity);
 
             String outputPath = "density.png";
-            saveDensityToPng(grid, solver, outputPath);
+            ImageRenderer.saveDensityToPng(grid, solver, outputPath);
             System.out.println("Saved density image to " + outputPath);
 
             if (config.exportVideo) {
@@ -332,7 +292,7 @@ public class Main {
                 previewWindow.close();
             }
             if (tempFramesDirectory != null) {
-                deleteDirectoryRecursively(tempFramesDirectory.toFile());
+                Utils.deleteDirectoryRecursively(tempFramesDirectory.toFile());
             }
             Toolkit.getDefaultToolkit().beep();
         }
@@ -354,10 +314,10 @@ public class Main {
      */
     private static SimulationConfig parseConfig(String[] args) {
         // Defaults match your PowerShell runner, but you can still override via args.
-        int gridWidth = parsePositiveInt(args, 0, DEFAULT_GRID_WIDTH, "grid width");
-        int gridHeight = parsePositiveInt(args, 1, DEFAULT_GRID_HEIGHT, "grid height");
-        int emitterCount = parsePositiveInt(args, 2, DEFAULT_EMITTER_COUNT, "emitter count");
-        int simulationSteps = parsePositiveInt(args, 3, DEFAULT_SIMULATION_STEPS, "simulation steps");
+        int gridWidth = parsePositiveInt(args, 0, Constants.DEFAULT_GRID_WIDTH, "grid width");
+        int gridHeight = parsePositiveInt(args, 1, Constants.DEFAULT_GRID_HEIGHT, "grid height");
+        int emitterCount = parsePositiveInt(args, 2, Constants.DEFAULT_EMITTER_COUNT, "emitter count");
+        int simulationSteps = parsePositiveInt(args, 3, Constants.DEFAULT_SIMULATION_STEPS, "simulation steps");
         boolean exportVideo = parseBoolean(args, 4, false, "export video");
         boolean logEveryStep = parseBoolean(args, 5, false, "log every step");
 
@@ -430,140 +390,6 @@ public class Main {
     }
 
     /**
-     * Renders the current fluid density fields into a high-resolution PNG image.
-     *
-     * <p>The simulation grid is upscaled using bilinear interpolation to a
-     * fixed output resolution defined by {@code FINAL_STILL_WIDTH} and
-     * {@code FINAL_STILL_HEIGHT}.</p>
-     *
-     * @param grid the simulation grid defining logical cell layout
-     * @param solver solver containing the current density fields
-     * @param outputPath file path where the PNG image will be written
-     */
-
-    private static void saveDensityToPng(FluidGrid grid, FluidSolver solver, String outputPath) {
-        // Upscaled final still
-        BufferedImage image = createDensityImage(grid, solver, FINAL_STILL_WIDTH, FINAL_STILL_HEIGHT);
-        saveImage(image, outputPath);
-    }
-
-    /**
-     * Writes a {@link BufferedImage} to disk as a PNG file.
-     *
-     * @param image the image to write
-     * @param outputPath destination file path
-     * @throws RuntimeException if the image cannot be written
-     */
-    private static void saveImage(BufferedImage image, String outputPath) {
-        try {
-            ImageIO.write(image, "png", new File(outputPath));
-        } catch (IOException exception) {
-            throw new RuntimeException("Failed to write PNG to " + outputPath, exception);
-        }
-    }
-
-    /**
-     * Converts simulation density fields into an RGBA image.
-     *
-     * <p>Each color channel (red, green, blue) is sampled independently from
-     * the solver's density fields and normalized by its own maximum value.
-     * This prevents strong channels from washing out weaker ones.</p>
-     *
-     * <p>The image is generated at an arbitrary output resolution using
-     * bilinear interpolation over the simulation grid.</p>
-     *
-     * @param grid simulation grid defining valid cell indices
-     * @param solver solver providing density fields
-     * @param outputWidth desired output image width in pixels
-     * @param outputHeight desired output image height in pixels
-     * @return a newly allocated {@link BufferedImage} containing the rendered density
-     */
-
-    private static BufferedImage createDensityImage(
-            FluidGrid grid,
-            FluidSolver solver,
-            int outputWidth,
-            int outputHeight
-    ) {
-        BufferedImage image = new BufferedImage(outputWidth, outputHeight, BufferedImage.TYPE_INT_ARGB);
-
-        float[] red = solver.redDensityField.readValues;
-        float[] green = solver.greenDensityField.readValues;
-        float[] blue = solver.blueDensityField.readValues;
-
-        // Normalize each channel by its own max value to avoid washing out weaker colors.
-        float maxRedDensity = 0.0f;
-        float maxGreenDensity = 0.0f;
-        float maxBlueDensity = 0.0f;
-        for (int y = 1; y <= grid.height; y++) {
-            for (int x = 1; x <= grid.width; x++) {
-                int index = grid.index(x, y);
-                maxRedDensity = Math.max(maxRedDensity, red[index]);
-                maxGreenDensity = Math.max(maxGreenDensity, green[index]);
-                maxBlueDensity = Math.max(maxBlueDensity, blue[index]);
-            }
-        }
-
-        float redNormalization = maxRedDensity > 0.0f ? maxRedDensity : 1.0f;
-        float greenNormalization = maxGreenDensity > 0.0f ? maxGreenDensity : 1.0f;
-        float blueNormalization = maxBlueDensity > 0.0f ? maxBlueDensity : 1.0f;
-
-        for (int outY = 0; outY < outputHeight; outY++) {
-            float simY = 1.0f + (outY / (float) outputHeight) * (grid.height - 1);
-
-            for (int outX = 0; outX < outputWidth; outX++) {
-                float simX = 1.0f + (outX / (float) outputWidth) * (grid.width - 1);
-
-                float normalizedRed = clamp(bilinearSample(grid, red, simX, simY) / redNormalization, 0.0f, 1.0f);
-                float normalizedGreen = clamp(bilinearSample(grid, green, simX, simY) / greenNormalization, 0.0f, 1.0f);
-                float normalizedBlue = clamp(bilinearSample(grid, blue, simX, simY) / blueNormalization, 0.0f, 1.0f);
-
-                int r = Math.round(normalizedRed * 255.0f);
-                int g = Math.round(normalizedGreen * 255.0f);
-                int b = Math.round(normalizedBlue * 255.0f);
-
-                int argb = (255 << 24) | (r << 16) | (g << 8) | b;
-                image.setRGB(outX, outY, argb);
-            }
-        }
-
-        return image;
-    }
-
-    /**
-     * Samples a scalar field at a fractional grid position using bilinear interpolation.
-     *
-     * <p>Coordinates are clamped to the valid grid domain before sampling.</p>
-     *
-     * @param grid simulation grid used for index mapping
-     * @param values scalar field values stored in grid-indexed layout
-     * @param x continuous x-coordinate in grid space
-     * @param y continuous y-coordinate in grid space
-     * @return interpolated scalar value at the given position
-     */
-    private static float bilinearSample(FluidGrid grid, float[] values, float x, float y) {
-        float clampedX = clamp(x, 1.0f, grid.width);
-        float clampedY = clamp(y, 1.0f, grid.height);
-
-        int x0 = (int) Math.floor(clampedX);
-        int y0 = (int) Math.floor(clampedY);
-        int x1 = Math.min(grid.width, x0 + 1);
-        int y1 = Math.min(grid.height, y0 + 1);
-
-        float tx = clampedX - x0;
-        float ty = clampedY - y0;
-
-        float v00 = values[grid.index(x0, y0)];
-        float v10 = values[grid.index(x1, y0)];
-        float v01 = values[grid.index(x0, y1)];
-        float v11 = values[grid.index(x1, y1)];
-
-        float top = v00 + tx * (v10 - v00);
-        float bottom = v01 + tx * (v11 - v01);
-        return top + ty * (bottom - top);
-    }
-
-    /**
      * Encodes a sequence of numbered PNG frames into an MP4 video using ffmpeg.
      *
      * <p>Frames must be named {@code frame-00000.png}, {@code frame-00001.png}, etc.
@@ -584,7 +410,7 @@ public class Main {
             ProcessBuilder ffmpegBuilder = new ProcessBuilder(
                     "ffmpeg",
                     "-y",
-                    "-framerate", String.valueOf(MP4_FRAMES_PER_SECOND),
+                    "-framerate", String.valueOf(Constants.MP4_FRAMES_PER_SECOND),
                     "-i", framesDirectory.resolve("frame-%05d.png").toString(),
                     "-c:v", "libx264",
                     "-pix_fmt", "yuv420p",
@@ -610,155 +436,6 @@ public class Main {
         }
     }
 
-    /**
-     * Recursively deletes a directory and all files and subdirectories it contains.
-     *
-     * @param directory root directory to delete
-     */
-    private static void deleteDirectoryRecursively(File directory) {
-        File[] files = directory.listFiles();
-        if (files != null) {
-            for (File file : files) {
-                if (file.isDirectory()) {
-                    deleteDirectoryRecursively(file);
-                } else {
-                    file.delete();
-                }
-            }
-        }
-        directory.delete();
-    }
-
-    /**
-     * Generates fluid emitters positioned near the grid edges.
-     *
-     * <p>Emitters are placed along the four boundaries and aimed roughly toward
-     * the grid center, with randomized angular variation, speed, and color.
-     * Additional constraints prevent near-tangential wall flow and corner-sniping.</p>
-     *
-     * @param grid simulation grid used for placement bounds
-     * @param emitterCount number of emitters to generate
-     * @param random random source used for placement and parameter jitter
-     * @return list of configured {@link FluidEmitter} instances
-     */
-    private static List<FluidEmitter> generateEdgeEmitters(FluidGrid grid, int emitterCount, Random random) {
-        List<FluidEmitter> emitters = new ArrayList<>();
-
-        float centerX = (grid.width + 1) / 2.0f;
-        float centerY = (grid.height + 1) / 2.0f;
-
-        int radius = computeEmitterRadius(grid);
-        int offset = radius + 2;
-
-        while (emitters.size() < emitterCount) {
-            int side = random.nextInt(4);
-            int x;
-            int y;
-
-            switch (side) {
-                case 0 -> { // top
-                    x = 1 + random.nextInt(grid.width);
-                    y = 1 + offset;
-                }
-                case 1 -> { // bottom
-                    x = 1 + random.nextInt(grid.width);
-                    y = grid.height - offset;
-                }
-                case 2 -> { // left
-                    x = 1 + offset;
-                    y = 1 + random.nextInt(grid.height);
-                }
-                case 3 -> { // right
-                    x = grid.width - offset;
-                    y = 1 + random.nextInt(grid.height);
-                }
-                default -> throw new IllegalStateException();
-            }
-
-            float dx = centerX - x;
-            float dy = centerY - y;
-            float centerAngle = (float) Math.toDegrees(Math.atan2(dy, dx));
-
-            float candidateAngle;
-            int attempts = 0;
-
-            do {
-                float jitter = randomRange(
-                        random,
-                        -EMITTER_ANGLE_VARIATION_DEGREES,
-                        EMITTER_ANGLE_VARIATION_DEGREES
-                );
-                candidateAngle = centerAngle + jitter;
-                attempts++;
-            } while (
-                    (!isValidForWall(candidateAngle, side)) &&
-                            attempts < 25
-            );
-
-            float[] color = NAMESPACE_COLORS[
-                    emitters.size() % NAMESPACE_COLORS.length
-                    ];
-
-            float speed = randomRange(
-                    random,
-                    MIN_EMISSION_SPEED,
-                    MAX_EMISSION_SPEED
-            );
-
-            emitters.add(new FluidEmitter(
-                    x,
-                    y,
-                    radius,
-                    DEFAULT_DENSITY_RATE,
-                    candidateAngle,
-                    speed,
-                    color[0],
-                    color[1],
-                    color[2]
-            ));
-        }
-
-        return emitters;
-    }
-
-    /**
-     * Generates a uniformly distributed random float in a closed-open interval.
-                *
-                * @param random random number generator
-     * @param min inclusive lower bound
-     * @param max exclusive upper bound
-     * @return random value in the range {@code [min, max)}
-     */
-    private static float randomRange(Random random, float min, float max) {
-        return min + random.nextFloat() * (max - min);
-    }
-
-    /**
-     * Computes an emitter radius based on grid dimensions.
-     *
-     * <p>The radius scales with grid size but is clamped to a practical
-     * minimum and maximum.</p>
-     *
-     * @param grid simulation grid
-     * @return emitter radius in grid cells
-     */
-    private static int computeEmitterRadius(FluidGrid grid) {
-        int radiusFromRatio = Math.round(Math.min(grid.width, grid.height) * EMITTER_RADIUS_RATIO);
-        return Math.min(MAX_EMITTER_RADIUS, Math.max(MIN_EMITTER_RADIUS, radiusFromRatio));
-    }
-
-    /**
-     * Clamps a floating-point value to a closed interval.
-     *
-     * @param value input value
-     * @param min lower bound
-     * @param max upper bound
-     * @return {@code value} constrained to {@code [min, max]}
-     */
-    private static float clamp(float value, float min, float max) {
-        return Math.max(min, Math.min(max, value));
-    }
-
 
     private record SimulationConfig(
             int gridWidth,
@@ -768,121 +445,4 @@ public class Main {
             boolean exportVideo,
             boolean logEveryStep
     ) {}
-
-    /**
-     * Small Swing window for displaying the latest simulation frame while the solver runs.
-     */
-    private static final class SimulationPreviewWindow {
-        private final JFrame frame;
-        private final JLabel imageLabel;
-
-        private SimulationPreviewWindow(int width, int height) {
-            try {
-                final JFrame[] holder = new JFrame[1];
-                final JLabel[] labelHolder = new JLabel[1];
-                SwingUtilities.invokeAndWait(() -> {
-                    JFrame previewFrame = new JFrame("Stable Fluid - Live Preview");
-                    JLabel previewLabel = new JLabel();
-                    previewLabel.setPreferredSize(new java.awt.Dimension(width, height));
-                    previewFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-                    previewFrame.setContentPane(previewLabel);
-                    previewFrame.pack();
-                    previewFrame.setLocationByPlatform(true);
-                    previewFrame.setVisible(true);
-                    holder[0] = previewFrame;
-                    labelHolder[0] = previewLabel;
-                });
-                this.frame = holder[0];
-                this.imageLabel = labelHolder[0];
-            } catch (Exception exception) {
-                throw new RuntimeException("Failed to initialize preview window.", exception);
-            }
-        }
-
-        private void update(BufferedImage image, int step) {
-            if (image == null) {
-                return;
-            }
-
-            SwingUtilities.invokeLater(() -> {
-                imageLabel.setIcon(new ImageIcon(image));
-                frame.setTitle("Stable Fluid - Live Preview (Step " + step + ")");
-            });
-        }
-
-        private void close() {
-            try {
-                SwingUtilities.invokeAndWait(frame::dispose);
-            } catch (Exception exception) {
-                throw new RuntimeException("Failed to close preview window cleanly.", exception);
-            }
-        }
-    }
-
-    /**
-     * Determines whether an emission angle is valid for a given wall.
-     *
-     * <p>This method rejects angles that are nearly tangential to the wall
-     * or that point directly toward grid corners, which can cause numerical
-     * artifacts or degenerate flow patterns.</p>
-     *
-     * @param angleDeg emission angle in degrees
-     * @param side wall identifier (0=top, 1=bottom, 2=left, 3=right)
-     * @return {@code true} if the angle is acceptable for this wall
-     */
-    private static boolean isValidForWall(float angleDeg, int side) {
-        float a = normalizeAngle(angleDeg);
-
-        // Reject near-tangential flow along the wall
-        float tangent = switch (side) {
-            case 0, 1 -> 0f;    // top/bottom → horizontal tangent
-            case 2, 3 -> 90f;   // left/right → vertical tangent
-            default -> throw new IllegalArgumentException();
-        };
-
-        if (near(a, tangent, WALL_TANGENT_EXCLUSION) ||
-                near(a, tangent + 180f, WALL_TANGENT_EXCLUSION)) {
-            return false;
-        }
-
-        // Reject corner-sniping diagonals
-        return switch (side) {
-            case 0 -> !near(a, 45f, CORNER_EXCLUSION) &&
-                    !near(a, 135f, CORNER_EXCLUSION);
-            case 1 -> !near(a, 225f, CORNER_EXCLUSION) &&
-                    !near(a, 315f, CORNER_EXCLUSION);
-            case 2 -> !near(a, 45f, CORNER_EXCLUSION) &&
-                    !near(a, 315f, CORNER_EXCLUSION);
-            case 3 -> !near(a, 135f, CORNER_EXCLUSION) &&
-                    !near(a, 225f, CORNER_EXCLUSION);
-            default -> true;
-        };
-    }
-
-    /**
-     * Normalizes an angle to the range {@code [0, 360)} degrees.
-     *
-     * @param a angle in degrees
-     * @return normalized angle in degrees
-     */
-    private static float normalizeAngle(float a) {
-        a %= 360f;
-        return a < 0 ? a + 360f : a;
-    }
-
-    /**
-     * Tests whether two angles are within a given angular tolerance.
-     *
-     * <p>Comparison is performed on a circular domain.</p>
-     *
-     * @param a first angle in degrees
-     * @param target target angle in degrees
-     * @param eps tolerance in degrees
-     * @return {@code true} if the angular difference is less than {@code eps}
-     */
-    private static boolean near(float a, float target, float eps) {
-        float d = Math.abs((a - target + 180f) % 360f - 180f);
-        return d < eps;
-    }
-
 }
