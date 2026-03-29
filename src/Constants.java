@@ -4,7 +4,7 @@ public class Constants {
     public static final float MIN_EMISSION_SPEED = 0.7f;
     public static final float MAX_EMISSION_SPEED = 1.1f;
     public static final float TIMESTEP = 0.030f;
-    public static final float VISCOSITY = 0.000001f;
+    public static final float VISCOSITY = 0.0000001f;
     public static final float DIFFUSION_RATE = 0.00006f;
     public static final int SOLVER_ITERATIONS = 25;
     public static final float VORTICITY_CONFINEMENT = 10.0f;

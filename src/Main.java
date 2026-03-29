@@ -1,17 +1,11 @@
-import javax.imageio.ImageIO;
-import javax.swing.ImageIcon;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.SwingUtilities;
+
 import java.awt.GraphicsEnvironment;
 import java.awt.Toolkit;
 import java.awt.image.BufferedImage;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import static java.lang.Math.clamp;
@@ -29,7 +23,7 @@ public class Main {
      *
      * <p>Initializes the simulation configuration, constructs the fluid grid,
      * solver, and emitters, then advances the simulation for a fixed number
-     * of steps. Depending on command-line flags, this method may export
+     * of steps. Depending on commandline flags, this method may export
      * intermediate PNG frames, a final high-resolution still image, and an
      * MP4 video encoded via ffmpeg</p>
      *
@@ -65,115 +59,16 @@ public class Main {
                 Constants.VORTICITY_CONFINEMENT
         );
 
+        // Change the commented out function to change modes :)
+        EmitterHolder holder = InitializeRegionDivision(grid);
+        //EmitterHolder holder = InitializeEdgeShooterDemo(grid, config);
+
         List<FluidSource> sources = List.of();
+        List<FluidEmitter> emitters = holder.fluidEmitters();
+        List<RadialFluidEmitter> radialEmitters = holder.radialFluidEmitters();
+        List<Vortex> vortexes = holder.vortexes();
+        List<Wall> walls = holder.walls();
 
-        Random random = new Random(Constants.RANDOM_SEED);
-        List<FluidEmitter> emitters = List.of(); //generateEdgeEmitters(grid, config.emitterCount, random);
-
-        List<RadialFluidEmitter> radialEmitters = List.of(
-                new RadialFluidEmitter(
-                        ((grid.width + 1) / 8) * 7,
-                        (grid.height + 1) / 8,
-                        20,
-                        1.5f,
-                        0.5f,
-                        248f/255f, 248f/255f, 56f/255f
-                ),
-                new RadialFluidEmitter(
-                        ((grid.width + 1) / 8),
-                        ((grid.height + 1) / 8) * 7,
-                        20,
-                        1.5f,
-                        0.5f,
-                        221f / 255f, 74f / 255f, 225f/ 255f
-                ),
-                new RadialFluidEmitter(
-                        ((grid.width + 1) / 8) * 7,
-                        ((grid.height + 1) / 8) * 7,
-                        20,
-                        1.5f,
-                        0.5f,
-                        248f/255f, 248f/255f, 56f/255f
-                ),
-                new RadialFluidEmitter(
-                        ((grid.width + 1) / 8),
-                        (grid.height + 1) / 8,
-                        20,
-                        1.5f,
-                        0.5f,
-                        221f / 255f, 74f / 255f, 225f/ 255f
-                ),
-                new RadialFluidEmitter(
-                        ((grid.width + 1) / 2),
-                        ((grid.height + 1) / 8) * 7,
-                        9,
-                        0.6f,
-                        0.3f,
-                        3f / 255f, 525f / 255f, 19f/ 255f
-                ),
-                new RadialFluidEmitter(
-                        ((grid.width + 1) / 2),
-                        ((grid.height + 1) / 8),
-                        9,
-                        0.6f,
-                        0.3f,
-                        7f / 255f, 231f / 255f, 242f/ 255f
-                )
-
-        );
-
-        List<Vortex> vortexes = List.of(
-
-                new Vortex(
-                        (grid.width + 1) / 2,
-                        (grid.height + 1) / 2,
-                        grid.width / 3,
-                        0.15f,
-                        0.00001f,
-                        0.1f,
-                        -1
-                )/*,
-                new Vortex(
-                        ((grid.width + 1) / 4) * 3,
-                        (grid.height + 1) / 2,
-                        200,
-                        4000.0f,
-                        20.0f,
-                        1000f
-                )*/
-        );
-
-        int leftWallX = (grid.width + 1) / 4;
-        int rightWallX = ((grid.width + 1) / 4) * 3;
-
-        int rightGapTop = (grid.height / 10) * 4;
-        int rightGapBottom = (grid.height/ 10) * 6;
-
-        int leftGapTop = (grid.height / 10) * 4;
-        int leftGapBottom = (grid.height / 10) * 6;
-
-        List<Wall> walls = List.of(
-                new Wall(
-                        40,
-                        new WallPoint(rightWallX, 1),
-                        new WallPoint(rightWallX, leftGapTop)
-                ),
-                new Wall(
-                        40,
-                        new WallPoint(rightWallX, leftGapBottom),
-                        new WallPoint(rightWallX, grid.height)
-                ),
-                new Wall(
-                        40,
-                        new WallPoint(leftWallX, 1),
-                        new WallPoint(leftWallX, rightGapTop)
-                ),
-                new Wall(
-                        40,
-                        new WallPoint(leftWallX, rightGapBottom),
-                        new WallPoint(leftWallX, grid.height)
-                )
-        );
 
         FluidSolver solver = new FluidSolver(grid, parameters, sources, emitters, radialEmitters, vortexes, walls);
 
@@ -300,6 +195,135 @@ public class Main {
         long programEndTime = System.nanoTime();
         double elapsedSeconds = (programEndTime - programStartTime) / 1_000_000_000.0;
         System.out.printf("Total runtime: %.3f seconds%n", elapsedSeconds);
+    }
+
+    /**
+     * Initializes a series of emitters around the edge of the frame
+     *
+     * @param grid The FluidGrid the emitters are in
+     * @return an EmitterHolder containing the lists of emitters
+     */
+    private static EmitterHolder InitializeEdgeShooterDemo(FluidGrid grid, SimulationConfig config){
+        Random random = new Random(Constants.RANDOM_SEED);
+        List<FluidEmitter> emitters = EmitterMaker.generateEdgeEmitters(grid, config.emitterCount, random);
+
+        return new EmitterHolder(emitters, List.of(), List.of(), List.of());
+    }
+
+    /**
+     * Initializes the emitters in their correct positions for the Region Division assignment
+     *
+     * @param grid The FluidGrid the emitters are in
+     * @return an EmitterHolder containing the lists of emitters
+     */
+    private static EmitterHolder InitializeRegionDivision(FluidGrid grid){
+        List<FluidEmitter> fluidEmitters = List.of();
+        List<RadialFluidEmitter> radialEmitters = List.of(
+                new RadialFluidEmitter(
+                        ((grid.width + 1) / 8) * 7,
+                        (grid.height + 1) / 8,
+                        20,
+                        1.5f,
+                        0.5f,
+                        248f/255f, 248f/255f, 56f/255f
+                ),
+                new RadialFluidEmitter(
+                        ((grid.width + 1) / 8),
+                        ((grid.height + 1) / 8) * 7,
+                        20,
+                        1.5f,
+                        0.5f,
+                        221f / 255f, 74f / 255f, 225f/ 255f
+                ),
+                new RadialFluidEmitter(
+                        ((grid.width + 1) / 8) * 7,
+                        ((grid.height + 1) / 8) * 7,
+                        20,
+                        1.5f,
+                        0.5f,
+                        248f/255f, 248f/255f, 56f/255f
+                ),
+                new RadialFluidEmitter(
+                        ((grid.width + 1) / 8),
+                        (grid.height + 1) / 8,
+                        20,
+                        1.5f,
+                        0.5f,
+                        221f / 255f, 74f / 255f, 225f/ 255f
+                ),
+                new RadialFluidEmitter(
+                        ((grid.width + 1) / 2),
+                        ((grid.height + 1) / 8) * 7,
+                        9,
+                        0.6f,
+                        0.3f,
+                        3f / 255f, 525f / 255f, 19f/ 255f
+                ),
+                new RadialFluidEmitter(
+                        ((grid.width + 1) / 2),
+                        ((grid.height + 1) / 8),
+                        9,
+                        0.6f,
+                        0.3f,
+                        7f / 255f, 231f / 255f, 242f/ 255f
+                )
+
+        );
+
+        List<Vortex> vortexes = List.of(
+
+                new Vortex(
+                        (grid.width + 1) / 2,
+                        (grid.height + 1) / 2,
+                        grid.width / 3,
+                        0.15f,
+                        0.00001f,
+                        0.1f,
+                        -1
+                )/*,
+                new Vortex(
+                        ((grid.width + 1) / 4) * 3,
+                        (grid.height + 1) / 2,
+                        200,
+                        4000.0f,
+                        20.0f,
+                        1000f
+                )*/
+        );
+
+        int leftWallX = (grid.width + 1) / 4;
+        int rightWallX = ((grid.width + 1) / 4) * 3;
+
+        int rightGapTop = (grid.height / 10) * 4;
+        int rightGapBottom = (grid.height/ 10) * 6;
+
+        int leftGapTop = (grid.height / 10) * 4;
+        int leftGapBottom = (grid.height / 10) * 6;
+
+        List<Wall> walls = List.of(
+                new Wall(
+                        40,
+                        new WallPoint(rightWallX, 1),
+                        new WallPoint(rightWallX, leftGapTop)
+                ),
+                new Wall(
+                        40,
+                        new WallPoint(rightWallX, leftGapBottom),
+                        new WallPoint(rightWallX, grid.height)
+                ),
+                new Wall(
+                        40,
+                        new WallPoint(leftWallX, 1),
+                        new WallPoint(leftWallX, rightGapTop)
+                ),
+                new Wall(
+                        40,
+                        new WallPoint(leftWallX, rightGapBottom),
+                        new WallPoint(leftWallX, grid.height)
+                )
+        );
+
+        return new EmitterHolder(fluidEmitters, radialEmitters, vortexes, walls);
     }
 
     /**
