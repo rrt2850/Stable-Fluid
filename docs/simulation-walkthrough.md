@@ -55,25 +55,70 @@ Chronologically, `Main` does this:
 
 ## `FluidSolver` initialization
 
-When `FluidSolver` is constructed, it creates these fields:
+When `FluidSolver` is constructed, it allocates and initializes the following objects in the constructor
+(`FluidSolver(FluidGrid, SimulationParameters, ...)`), in this order:
 
-- **Vector fields** (`VectorField`)
-  - `readVelocityX` / `writeVelocityX` = horizontal velocity buffer pair
-  - `readVelocityY` / `writeVelocityY` = vertical velocity buffer pair
-  - Stored with read/write buffers (ping-pong swapping)
-- **Density fields** (`ScalarField`)
-  - Separate channels: red, green, blue
-  - Also double-buffered
-- **Pressure and divergence** (`ScalarField` each)
-  - Temporary but persistent work buffers reused each step
+1. **Core references**
+   - `grid = Objects.requireNonNull(grid, ...)`
+   - `parameters = Objects.requireNonNull(parameters, ...)`
+   - Purpose: keep a shared reference to domain geometry and all physical/numerical constants.
 
-It also initializes:
+2. **Velocity field object**
+   - `velocityField = new VectorField(grid.totalCellCount)`
+   - Creates 4 arrays (inside `VectorField`) sized to `grid.totalCellCount`:
+     - `readVelocityX`, `writeVelocityX`, `readVelocityY`, `writeVelocityY`
+   - Initial values: all `0.0f` by Java default array initialization.
+   - Purpose:
+     - `read*` arrays hold the current step state.
+     - `write*` arrays are scratch/output buffers for diffusion/advection/projection kernels.
+     - The solver swaps read/write roles after each substep (ping-pong buffering).
 
-- `LinearSolver` (iterative relaxation for implicit solves / Poisson)
-- `BoundaryHandler` (domain-edge boundary conditions)
-- `wallMask` (boolean occupancy map for interior obstacles)
+3. **RGB density field objects**
+   - `redDensityField   = new ScalarField(grid.totalCellCount)`
+   - `greenDensityField = new ScalarField(grid.totalCellCount)`
+   - `blueDensityField  = new ScalarField(grid.totalCellCount)`
+   - Each `ScalarField` contains double buffers (`readValues`, `writeValues`) of length
+     `grid.totalCellCount`, initialized to `0.0f`.
+   - Purpose:
+     - Store per-cell dye concentration for each color channel.
+     - Maintain independent buffers so each scalar solve/advect stage can write safely.
 
-Then it validates all sources/emitters/walls are in bounds and builds wall occupancy from geometric segments.
+4. **Pressure and divergence work fields**
+   - `pressureField   = new ScalarField(grid.totalCellCount)`
+   - `divergenceField = new ScalarField(grid.totalCellCount)`
+   - Initial values: all zero in both read/write arrays.
+   - Purpose:
+     - `divergenceField` stores computed `∇·u` during projection.
+     - `pressureField` stores the Poisson solution used to subtract `∇p` and enforce incompressibility.
+     - Persistently allocated once to avoid per-frame allocations.
+
+5. **Numerical helper objects**
+   - `linearSolver = new LinearSolver(parameters.getLinearSolverIterations())`
+     - Initialized with the exact Jacobi iteration count from `SimulationParameters`.
+     - Purpose: iterative solve backend for velocity/density diffusion and pressure Poisson steps.
+   - `boundaryHandler = new BoundaryHandler()`
+     - Purpose: apply edge boundary conditions consistently after solver kernels.
+
+6. **Wall occupancy map**
+   - `wallMask = new boolean[grid.totalCellCount]`
+   - Initial values: all `false` (no blocked cells yet).
+   - Purpose: fast O(1) “is this cell a wall?” checks in collision and source/vortex logic.
+
+7. **Configured injector/collider lists (null-safe copies)**
+   - `densitySources`, `emitters`, `radialEmitters`, `vortexes`, and `walls`
+   - Initialization behavior:
+     - If the incoming list is non-null, constructor copies it into a new `ArrayList<>(...)`.
+     - If null, constructor uses `new ArrayList<>()` (empty list).
+   - Purpose:
+     - Prevent external mutation from affecting solver internals.
+     - Guarantee all loops in `step()` can run without null checks.
+
+8. **Input validation + wall rasterization**
+   - Validates every source/emitter/vortex/wall endpoint is non-null and in bounds.
+   - Calls `rebuildWallMask()` to rasterize all wall segments into `wallMask`.
+   - Result:
+     - Constructor fails fast for invalid setup.
+     - Simulation loop can assume validated, preprocessed state.
 
 ### Conceptual invariant
 At the end of construction:
