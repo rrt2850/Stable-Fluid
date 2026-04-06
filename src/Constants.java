@@ -21,7 +21,7 @@ public class Constants {
     public static final int FINAL_STILL_HEIGHT = 1200;
 
     public static final int MP4_FRAMES_PER_SECOND = 30;
-    public static final int INTERMITTENT_SNAPSHOT_INTERVAL = 50;
+    public static final int SNAPSHOT_INTERVAL = 50;
 
     public static final long RANDOM_SEED = System.currentTimeMillis();
 

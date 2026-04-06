@@ -1,67 +1,63 @@
-# Stable Fluid Simulation Walkthrough (Chronological + Technical)
-
-This document explains **how your simulation progresses in time**, mapping each phase to key functions and to the abstract math behind Stable Fluids.
+# Stable Fluid Simulation Writeup
 
 ---
 
-## 1) Process startup: scripts, compilation, and runtime inputs
+## Running the code
 
-- You launch via `start.sh` (Linux/macOS) or `start.ps1` (Windows).
-  - Each script accepts the same ordered arguments:
-    - `gridWidth`
-    - `gridHeight`
-    - `emitterCount`
-    - `simulationSteps`
-    - `exportVideo`
-    - `logEveryStep`
+- Run using `start.sh` (Linux/macOS) or `start.ps1` (Windows).
+  - Both scripts accept these arguments:
+    - `gridWidth`, the final width of the exported simulation
+    - `gridHeight`, the final height of the exported simulation //TODO: Check this, I think it's wrong
+    - `emitterCount`, the number of emitters to generate in emitter generation mode. Enter a random number here if you're running in the other mode.
+    - `simulationSteps`, the number of steps to progress the simulation before it ends
+    - `exportVideo`, 1 or 0, whether you want the video to be exported in addition to the final png
+    - `logEveryStep`, 1 or 0, whether you want a console log marking every iteration. I generally just keep this on.
   - If omitted, defaults are supplied by the script itself.
-- The script compiles `src/*.java` into `out/classes` using `javac`.
-- The JVM starts `Main`, passing those six arguments.
-
-### Why this matters technically
-- Grid resolution controls numerical cost and smallest representable flow features.
-- Number of steps controls total simulated time:
-  - `simulatedTime ≈ simulationSteps × TIMESTEP`.
-- Video/log flags only affect I/O; they do not change solver physics.
+- The script starts `Main`, passing these six arguments.
 
 ---
 
-## 2) `Main.main(...)`: building the simulation state graph
+## `Main.main()`: Setting up the simulation
 
 Chronologically, `Main` does this:
 
-- Parse CLI args into a typed `SimulationConfig`.
-  - Validates positive integers and strict booleans.
+- Parse command line args into a `SimulationConfig` object
+  - Validates the inputs in `parseConfig`
 - Construct `FluidGrid(width, height, cellSize)`.
   - `cellSize = 1 / max(width, height)`.
   - This normalizes the domain so derivatives scale with resolution.
 - Construct `SimulationParameters` from `Constants`:
-  - `TIMESTEP` (`Δt`)
-  - `VISCOSITY` (`ν`)
-  - `DIFFUSION_RATE` (`κ`)
-  - `SOLVER_ITERATIONS`
-  - `VORTICITY_CONFINEMENT` (`ε`)
-- Create injectors and constraints for this specific setup:
-  - Directional edge emitters (currently empty in this configuration).
-  - Multiple `RadialFluidEmitter` objects for localized colored momentum + density injection.
-  - A central `Vortex` influence object.
-  - Four vertical wall segments with gaps, forming obstacle channels.
-- Create `FluidSolver` with all of the above.
-
-### Why `cellSize` is important
-Most spatial operators are finite differences of the form:
-
-- `∂f/∂x ≈ (f(x+1) - f(x-1)) / (2Δx)`
-
-So `Δx = cellSize` appears in diffusion, divergence, pressure projection, and advection scaling.
+  - `TIMESTEP`, how many seconds pass every step of the simulation
+    - Smaller is more stable but slower. Larger is faster, but much less stable because advection relies on timestep.
+  - `VISCOSITY`, how flowy the grid liquid is
+    - Not accurate to real viscosity values
+  - `DIFFUSION_RATE`, how fast fluid sources diffuse
+    - For a more oily fluid, increase this constant.
+  - `SOLVER_ITERATIONS`, the number of Jacobi iterations to do per step (explained more later)
+  - `VORTICITY_CONFINEMENT`, how much swirl to add back in after diffusion (explained more later)
+- Do different things depending on which function is commented out:
+  - If `InitializeRegionDivision` is enabled
+    - Two walls are made with four `RadialFluidEmitters`, two on each side
+    - Two more radial fluid emitters are made in the middle.
+    - There is a gap in the wall that the `RadialFluidEmitter` fluid flows through
+    - All the fluids meet in the middle as they're sucked into a `Vortex` in the middle
+  - If `InitializeEdgeShooterDemo` is enabled
+    - `EmitterMaker` is used to generate `emitterCount` edge emitters all pointing within +- `EMITTER_ANGLE_VARIATION_DEGREES` of the center of the grid.
+- Open a window so you can view simulation frames real-time
+- Step through the simulation `simulationSteps` times:
+  - Calls `FluidSolver.step()` to progress the simulation
+  - Saves low-res frames for the mp4 in a temporary directory to be compiled at the end of the simulation
+  - Every `SNAPSHOT_INTERVAL` frames, it saves a high-res upscaled version of the current frame to the results directory
+- After the simulation is complete, save the resulting image to Density.png
+- Compiles all the frames into one mp4 if saving to video is enabled
 
 ---
 
-## 3) `FluidSolver` initialization: field allocation and invariants
+## `FluidSolver` initialization
 
 When `FluidSolver` is constructed, it creates these persistent fields:
 
-- **Velocity field** (`VectorField`)
+- `VectorField`
   - `u` = x-velocity
   - `v` = y-velocity
   - Stored with read/write buffers (ping-pong swapping)
@@ -296,22 +292,6 @@ Output modes:
 
 - Final upscaled still image.
 - Optional per-step frames and MP4 assembly.
-
----
-
-## 9) Parameter sensitivity: what each knob does numerically
-
-- `TIMESTEP (Δt)`
-  - Larger: faster apparent evolution; can increase transport error and visual instability.
-  - Smaller: more stable/accurate temporal integration; more steps needed.
-- `VISCOSITY (ν)`
-  - Increases momentum diffusion; suppresses fine velocity features.
-- `DIFFUSION_RATE (κ)`
-  - Increases scalar smoothing/mixing rate.
-- `SOLVER_ITERATIONS`
-  - Improves convergence of implicit/Poisson solves.
-- `VORTICITY_CONFINEMENT (ε)`
-  - Adds rotational energy at small scales for crisper curls.
 
 ---
 

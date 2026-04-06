@@ -60,8 +60,8 @@ public class Main {
         );
 
         // Change the commented out function to change modes :)
-        EmitterHolder holder = InitializeRegionDivision(grid);
-        //EmitterHolder holder = InitializeEdgeShooterDemo(grid, config);
+        //EmitterHolder holder = InitializeRegionDivision(grid);
+        EmitterHolder holder = InitializeEdgeShooterDemo(grid, config);
 
         List<FluidSource> sources = List.of();
         List<FluidEmitter> emitters = holder.fluidEmitters();
@@ -97,7 +97,7 @@ public class Main {
         System.out.println("Configured " + radialEmitters.size() + " radial emitters and "
                 + vortexes.size() + " vortex emitters.");
 
-        boolean takeIntermittentSnapshots = config.simulationSteps >= Constants.INTERMITTENT_SNAPSHOT_INTERVAL;
+        boolean takeIntermittentSnapshots = config.simulationSteps >= Constants.SNAPSHOT_INTERVAL;
         Path tempFramesDirectory = null;
         SimulationPreviewWindow previewWindow = null;
         try {
@@ -114,6 +114,7 @@ public class Main {
             for (int step = 1; step <= config.simulationSteps; step++) {
                 solver.step();
 
+                // Generate a small frame for the mp4 if exportVideo is enabled
                 BufferedImage simulationResolutionFrame = null;
                 if (config.exportVideo || previewWindow != null) {
                     simulationResolutionFrame = ImageRenderer.createDensityImage(
@@ -124,9 +125,7 @@ public class Main {
                     );
                 }
 
-                // ---------------------------------------------------------------------
-                // MP4 video frames (simulation resolution, fast)
-                // ---------------------------------------------------------------------
+                // if exportVideo is enabled, save the current frame in the temporary directory
                 if (config.exportVideo) {
                     Path framePath = tempFramesDirectory.resolve(
                             String.format("frame-%05d.png", step - 1)
@@ -134,14 +133,13 @@ public class Main {
                     ImageRenderer.saveImage(simulationResolutionFrame, framePath.toString());
                 }
 
+                // if the preview window exists, update it with the current frame
                 if (previewWindow != null) {
                     previewWindow.update(simulationResolutionFrame, step);
                 }
 
-                // ---------------------------------------------------------------------
-                // Intermittent snapshots (UPSCALED, high quality)
-                // ---------------------------------------------------------------------
-                if (takeIntermittentSnapshots && step % Constants.INTERMITTENT_SNAPSHOT_INTERVAL == 0) {
+                // Upscale the current frame every SNAPSHOT_INTERVAL frames
+                if (takeIntermittentSnapshots && step % Constants.SNAPSHOT_INTERVAL == 0) {
                     BufferedImage snapshotImage = ImageRenderer.createDensityImage(
                             grid,
                             solver,
@@ -158,12 +156,6 @@ public class Main {
 
                 if (config.logEveryStep) System.out.println("Step " + step);
             }
-
-            int center = grid.index((grid.width + 1) / 2, (grid.height + 1) / 2);
-            float centerDensity = solver.redDensityField.readValues[center]
-                    + solver.greenDensityField.readValues[center]
-                    + solver.blueDensityField.readValues[center];
-            System.out.println("Simulation ran. Center density=" + centerDensity);
 
             String outputPath = "density.png";
             ImageRenderer.saveDensityToPng(grid, solver, outputPath);

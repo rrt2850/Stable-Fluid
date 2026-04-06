@@ -179,6 +179,7 @@ public class FluidSolver {
                 continue;
             }
             int index = grid.index(source.gridX, source.gridY);
+            //TODO: Check this
             redDensityField.readValues[index] += dt * source.strength;
             greenDensityField.readValues[index] += dt * source.strength;
             blueDensityField.readValues[index] += dt * source.strength;
