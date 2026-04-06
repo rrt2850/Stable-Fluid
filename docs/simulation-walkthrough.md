@@ -55,11 +55,11 @@ Chronologically, `Main` does this:
 
 ## `FluidSolver` initialization
 
-When `FluidSolver` is constructed, it creates these persistent fields:
+When `FluidSolver` is constructed, it creates these fields:
 
-- `VectorField`
-  - `u` = x-velocity
-  - `v` = y-velocity
+- **Vector fields** (`VectorField`)
+  - `readVelocityX` / `writeVelocityX` = horizontal velocity buffer pair
+  - `readVelocityY` / `writeVelocityY` = vertical velocity buffer pair
   - Stored with read/write buffers (ping-pong swapping)
 - **Density fields** (`ScalarField`)
   - Separate channels: red, green, blue
@@ -127,9 +127,8 @@ Below is what each does technically.
 - Vortex objects apply custom influence fields to velocity/density.
 
 Abstractly this corresponds to source terms in PDE form:
-
-- `∂u/∂t = ... + f`
-- `∂ρ/∂t = ... + s`
+- Horizontal and vertical velocity arrays receive a force term each step
+- RGB density arrays (`readValues` in each `ScalarField`) receive injected density each step
 
 where `f` is momentum forcing and `s` is density production.
 
