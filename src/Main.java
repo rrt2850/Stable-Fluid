@@ -249,7 +249,7 @@ public class Main {
                         9,
                         0.6f,
                         0.3f,
-                        3f / 255f, 525f / 255f, 19f/ 255f
+                        3f / 255f, 25f / 255f, 19f/ 255f
                 ),
                 new RadialFluidEmitter(
                         ((grid.width + 1) / 2),
