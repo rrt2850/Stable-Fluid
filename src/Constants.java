@@ -17,8 +17,11 @@ public class Constants {
     public static final int DEFAULT_GRID_HEIGHT = 400;
 
     // Final still export resolution (upscaled from sim)
-    public static final int FINAL_STILL_WIDTH = 2400;
-    public static final int FINAL_STILL_HEIGHT = 1200;
+    //public static final int FINAL_STILL_WIDTH = 2400;
+    //public static final int FINAL_STILL_HEIGHT = 1200;
+
+    public static final int FINAL_STILL_WIDTH = 1920;
+    public static final int FINAL_STILL_HEIGHT = 1080;
 
     public static final int MP4_FRAMES_PER_SECOND = 30;
     public static final int SNAPSHOT_INTERVAL = 50;
@@ -53,5 +56,16 @@ public class Constants {
             {0.18f, 0.68f, 0.98f},
             {0.0f, 0.73f, 0.75f},
             {0.42f, 0.75f, 0.45f}
+    };
+
+    public static final float[][] AMBER_COLORS = {
+            {0.99f, 0.58f, 0.71f},
+            {1.0f, 0.47f, 0.65f},
+            {1.0f, 0.35f, 0.58f},
+            {1.0f, 0.15f, 0.51f},
+            {0.94f, 0.0f, 0.45f},
+            {0.49f, 0.20f, 1.0f},
+            {1.0f, 0.1f, 0.0f},
+            {0.98f, 0.61f, 0.007f}
     };
 }

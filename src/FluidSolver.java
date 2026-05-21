@@ -168,7 +168,7 @@ public class FluidSolver {
         applyWallCollisions();
     }
 
-    /** Injects density and momentum from configured sources, emitters, and vortexes. */
+    /** Injects density and momentum from configured sources, emitters, and vortexes */
     private void addSources() {
 
         float dt = parameters.getTimeStep();
@@ -179,7 +179,7 @@ public class FluidSolver {
                 continue;
             }
             int index = grid.index(source.gridX, source.gridY);
-            //TODO: Check this
+            //TODO: Check this, why scale timestep by source strength
             redDensityField.readValues[index] += dt * source.strength;
             greenDensityField.readValues[index] += dt * source.strength;
             blueDensityField.readValues[index] += dt * source.strength;

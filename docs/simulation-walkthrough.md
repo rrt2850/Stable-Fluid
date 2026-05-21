@@ -6,13 +6,15 @@
 
 - Run using `start.sh` (Linux/macOS) or `start.ps1` (Windows).
   - Both scripts accept these arguments:
-    - `gridWidth`, the final width of the exported simulation
-    - `gridHeight`, the final height of the exported simulation //TODO: Check this, I think it's wrong
+    - `gridWidth`, the width of the simulation
+    - `gridHeight`, the height of the simulation
+    -  `gridWidth` and `gridHeight` are the low-res resolutions for the current frame, all frames are upscaled to 
+      - `FINAL_STILL_WIDTH = 2400` and `FINAL_STILL_HEIGHT = 1200`
     - `emitterCount`, the number of emitters to generate in emitter generation mode. Enter a random number here if you're running in the other mode.
     - `simulationSteps`, the number of steps to progress the simulation before it ends
     - `exportVideo`, 1 or 0, whether you want the video to be exported in addition to the final png
     - `logEveryStep`, 1 or 0, whether you want a console log marking every iteration. I generally just keep this on.
-  - If omitted, defaults are supplied by the script itself.
+  - If omitted, defaults are supplied by the script itself. 
 - The script starts `Main`, passing these six arguments.
 
 ---
@@ -23,16 +25,16 @@ Chronologically, `Main` does this:
 
 - Parse command line args into a `SimulationConfig` object
   - Validates the inputs in `parseConfig`
-- Construct `FluidGrid(width, height, cellSize)`.
-  - `cellSize = 1 / max(width, height)`.
-  - This normalizes the domain so derivatives scale with resolution.
+- Construct `FluidGrid(width, height, cellSize)`
+  - `cellSize = 1 / max(width, height)`
+  - This normalizes the domain so derivatives scale with resolution
 - Construct `SimulationParameters` from `Constants`:
   - `TIMESTEP`, how many seconds pass every step of the simulation
     - Smaller is more stable but slower. Larger is faster, but much less stable because advection relies on timestep.
   - `VISCOSITY`, how flowy the grid liquid is
     - Not accurate to real viscosity values
   - `DIFFUSION_RATE`, how fast fluid sources diffuse
-    - For a more oily fluid, increase this constant.
+    - For a more oily fluid, increase this
   - `SOLVER_ITERATIONS`, the number of Jacobi iterations to do per step (explained more later)
   - `VORTICITY_CONFINEMENT`, how much swirl to add back in after diffusion (explained more later)
 - Do different things depending on which function is commented out:
@@ -55,99 +57,81 @@ Chronologically, `Main` does this:
 
 ## `FluidSolver` initialization
 
-When `FluidSolver` is constructed, it allocates and initializes the following objects in the constructor
-(`FluidSolver(FluidGrid, SimulationParameters, ...)`), in this order:
+When `FluidSolver` is constructed, it allocates and initializes the following objects in the constructor in this order:
 
 1. **Core references**
-   - `grid = Objects.requireNonNull(grid, ...)`
-   - `parameters = Objects.requireNonNull(parameters, ...)`
-   - Purpose: keep a shared reference to domain geometry and all physical/numerical constants.
+   - `FluidGrid grid` and `SimulationParameters parameters`
+   - Purpose: keep a shared reference to domain geometry and all constants
 
 2. **Velocity field object**
    - `velocityField = new VectorField(grid.totalCellCount)`
    - Creates 4 arrays (inside `VectorField`) sized to `grid.totalCellCount`:
      - `readVelocityX`, `writeVelocityX`, `readVelocityY`, `writeVelocityY`
-   - Initial values: all `0.0f` by Java default array initialization.
+   - Initial values: all `0.0f`
    - Purpose:
-     - `read*` arrays hold the current step state.
-     - `write*` arrays are scratch/output buffers for diffusion/advection/projection kernels.
-     - The solver swaps read/write roles after each substep (ping-pong buffering).
+     - Read arrays hold the current step state
+     - Write arrays are scratch/output buffers for diffusion/advection/projection
+     - The solver swaps read/write roles after each substep (ping-pong buffering)
 
 3. **RGB density field objects**
    - `redDensityField   = new ScalarField(grid.totalCellCount)`
    - `greenDensityField = new ScalarField(grid.totalCellCount)`
    - `blueDensityField  = new ScalarField(grid.totalCellCount)`
    - Each `ScalarField` contains double buffers (`readValues`, `writeValues`) of length
-     `grid.totalCellCount`, initialized to `0.0f`.
+     `grid.totalCellCount`, initialized to `0.0f`
    - Purpose:
-     - Store per-cell dye concentration for each color channel.
-     - Maintain independent buffers so each scalar solve/advect stage can write safely.
+     - Store per-cell concentration for each color channel
+     - Keeps independent buffers so each scalar solve/advect stage can write safely
 
 4. **Pressure and divergence work fields**
    - `pressureField   = new ScalarField(grid.totalCellCount)`
    - `divergenceField = new ScalarField(grid.totalCellCount)`
    - Initial values: all zero in both read/write arrays.
    - Purpose:
-     - `divergenceField` stores computed `∇·u` during projection.
-     - `pressureField` stores the Poisson solution used to subtract `∇p` and enforce incompressibility.
-     - Persistently allocated once to avoid per-frame allocations.
+     - `divergenceField` stores divergence values computed during projection
+       - Divergence represents how much the velocity field is expanding or compressing. Divergence is negative the flow is converging to that point. if it's positive, the flow is diverging away from the point
+       - For incompressible fluids, the goal is to get the divergence values to 0.
+     - `pressureField` stores the Poisson solution used to subtract the gradient at a given point
+       - By subtracting the gradient at a given point from the divergence field, we reduce divergence and enforce incompressibility by adjusting the divergence closer to 0
+     - Persistently allocated once to avoid per-frame allocations // TODO: Figure out what this means
 
 5. **Numerical helper objects**
    - `linearSolver = new LinearSolver(parameters.getLinearSolverIterations())`
-     - Initialized with the exact Jacobi iteration count from `SimulationParameters`.
+     - Initialized with the Jacobi iteration count from `SimulationParameters`.
      - Purpose: iterative solve backend for velocity/density diffusion and pressure Poisson steps.
+     - // TODO: reword this
    - `boundaryHandler = new BoundaryHandler()`
-     - Purpose: apply edge boundary conditions consistently after solver kernels.
+     - Purpose: apply edge boundary conditions after the linear solver runs to clamp vectors that are going towards boundaries
+     - // TODO: Check if this is correct
 
 6. **Wall occupancy map**
    - `wallMask = new boolean[grid.totalCellCount]`
    - Initial values: all `false` (no blocked cells yet).
    - Purpose: fast O(1) “is this cell a wall?” checks in collision and source/vortex logic.
+   - Applies boundary rules to fluids interacting with wall cells
+     - // TODO: Check if this is correct
 
 7. **Configured injector/collider lists (null-safe copies)**
-   - `densitySources`, `emitters`, `radialEmitters`, `vortexes`, and `walls`
+   - `redensitySources`, `emitters`, `radialEmitters`, `vortexes`, and `walls`
    - Initialization behavior:
      - If the incoming list is non-null, constructor copies it into a new `ArrayList<>(...)`.
      - If null, constructor uses `new ArrayList<>()` (empty list).
    - Purpose:
      - Prevent external mutation from affecting solver internals.
      - Guarantee all loops in `step()` can run without null checks.
+   - // TODO: Check if we need to make a new copy or if we can just use the existing objects
 
 8. **Input validation + wall rasterization**
    - Validates every source/emitter/vortex/wall endpoint is non-null and in bounds.
    - Calls `rebuildWallMask()` to rasterize all wall segments into `wallMask`.
+     - // TODO: Look into specifics of how this works
    - Result:
      - Constructor fails fast for invalid setup.
-     - Simulation loop can assume validated, preprocessed state.
-
-### Conceptual invariant
-At the end of construction:
-
-- All solver-owned arrays have consistent sizes (`grid.totalCellCount`).
-- Inputs are safe (validated positions).
-- Obstacles are pre-rasterized to avoid expensive geometry checks inside each numerical kernel.
+     - Simulation loop can assume valid initial state.
 
 ---
 
-## 4) Main simulation loop (`for step = 1..N`)
-
-For each step in `Main`:
-
-- Call `solver.step()` (core fluid update).
-- Optionally render current fields to an image.
-- Optionally save frame for MP4 generation.
-- Optionally save high-resolution intermittent snapshots.
-
-After the loop:
-
-- Save final still image.
-- Optionally encode MP4 using `ffmpeg`.
-
----
-
-## 5) `FluidSolver.step()` in exact execution order (with math intuition)
-
-Your implementation follows a classic Stable Fluids split-step pipeline:
+## `FluidSolver.step()` in execution order
 
 1. `addSources()`
 2. `applyWallCollisions()`
@@ -161,18 +145,13 @@ Your implementation follows a classic Stable Fluids split-step pipeline:
 10. `advectDensity(red/green/blue)`
 11. `applyWallCollisions()`
 
-Below is what each does technically.
-
-### 5.1 `addSources()` — explicit forcing/injection
-
-- Point sources add scalar density directly to RGB channels.
-- Emitters inject:
+### 1 `addSources()`
+- Each emitter adds it's density and velocity to the simulation cells using its own emitter-specific function
   - density (color mass)
   - velocity (momentum)
-- Vortex objects apply custom influence fields to velocity/density.
-
-Abstractly this corresponds to source terms in PDE form:
+- Vortex objects apply custom influence fields to velocity/density
 - Horizontal and vertical velocity arrays receive a force term each step
+  - // TODO: Reword force term to be normal
 - RGB density arrays (`readValues` in each `ScalarField`) receive injected density each step
 
 where `f` is momentum forcing and `s` is density production.
