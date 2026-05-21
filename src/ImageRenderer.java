@@ -9,9 +9,9 @@ public class ImageRenderer {
     /**
      * Converts simulation density fields into an RGBA image.
      *
-     * <p>Each color channel (red, green, blue) is sampled independently from
-     * the solver's density fields and normalized by its own maximum value.
-     * This prevents strong channels from washing out weaker ones.</p>
+     * <p>Each color channel (red, green, blue) is sampled from the solver's
+     * density fields and scaled by a shared global maximum.
+     * This preserves hue relationships and avoids artificial white/yellow shifts.</p>
      *
      * <p>The image is generated at an arbitrary output resolution using
      * bilinear interpolation over the simulation grid.</p>
@@ -35,22 +35,19 @@ public class ImageRenderer {
         float[] green = solver.greenDensityField.readValues;
         float[] blue = solver.blueDensityField.readValues;
 
-        // Normalize each channel by its own max value to avoid washing out weaker colors.
-        float maxRedDensity = 0.0f;
-        float maxGreenDensity = 0.0f;
-        float maxBlueDensity = 0.0f;
+        // Normalize all channels by one shared peak density.
+        // Per-channel normalization shifts hue and can create white/yellow artifacts.
+        float maxDensity = 0.0f;
         for (int y = 1; y <= grid.height; y++) {
             for (int x = 1; x <= grid.width; x++) {
                 int index = grid.index(x, y);
-                maxRedDensity = Math.max(maxRedDensity, red[index]);
-                maxGreenDensity = Math.max(maxGreenDensity, green[index]);
-                maxBlueDensity = Math.max(maxBlueDensity, blue[index]);
+                maxDensity = Math.max(maxDensity, red[index]);
+                maxDensity = Math.max(maxDensity, green[index]);
+                maxDensity = Math.max(maxDensity, blue[index]);
             }
         }
 
-        float redNormalization = maxRedDensity > 0.0f ? maxRedDensity : 1.0f;
-        float greenNormalization = maxGreenDensity > 0.0f ? maxGreenDensity : 1.0f;
-        float blueNormalization = maxBlueDensity > 0.0f ? maxBlueDensity : 1.0f;
+        float densityNormalization = maxDensity > 0.0f ? maxDensity : 1.0f;
 
         for (int outY = 0; outY < outputHeight; outY++) {
             float simY = 1.0f + (outY / (float) outputHeight) * (grid.height - 1);
@@ -58,9 +55,9 @@ public class ImageRenderer {
             for (int outX = 0; outX < outputWidth; outX++) {
                 float simX = 1.0f + (outX / (float) outputWidth) * (grid.width - 1);
 
-                float normalizedRed = clamp(bilinearSample(grid, red, simX, simY) / redNormalization, 0.0f, 1.0f);
-                float normalizedGreen = clamp(bilinearSample(grid, green, simX, simY) / greenNormalization, 0.0f, 1.0f);
-                float normalizedBlue = clamp(bilinearSample(grid, blue, simX, simY) / blueNormalization, 0.0f, 1.0f);
+                float normalizedRed = clamp(bilinearSample(grid, red, simX, simY) / densityNormalization, 0.0f, 1.0f);
+                float normalizedGreen = clamp(bilinearSample(grid, green, simX, simY) / densityNormalization, 0.0f, 1.0f);
+                float normalizedBlue = clamp(bilinearSample(grid, blue, simX, simY) / densityNormalization, 0.0f, 1.0f);
 
                 int r = Math.round(normalizedRed * 255.0f);
                 int g = Math.round(normalizedGreen * 255.0f);
