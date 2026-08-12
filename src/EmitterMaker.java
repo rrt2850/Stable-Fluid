@@ -69,8 +69,8 @@ public class EmitterMaker {
                             attempts < 25
             );
 
-            float[] color = Constants.AMBER_COLORS[
-                    emitters.size() % Constants.AMBER_COLORS.length
+            float[] color = Constants.NAMESPACE_COLORS[
+                    emitters.size() % Constants.NAMESPACE_COLORS.length
                     ];
 
             float speed = Utils.randomRange(

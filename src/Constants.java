@@ -5,9 +5,9 @@ public class Constants {
     public static final float MAX_EMISSION_SPEED = 1.1f;
     public static final float TIMESTEP = 0.030f;
     public static final float VISCOSITY = 0.0000001f;
-    public static final float DIFFUSION_RATE = 0.00006f;
+    public static final float DIFFUSION_RATE = 0.0000001f;
     public static final int SOLVER_ITERATIONS = 25;
-    public static final float VORTICITY_CONFINEMENT = 10.0f;
+    public static final float VORTICITY_CONFINEMENT = 5.0f;
 
     public static final int DEFAULT_SIMULATION_STEPS = 100;
     public static final int DEFAULT_EMITTER_COUNT = 8;
@@ -59,13 +59,13 @@ public class Constants {
     };
 
     public static final float[][] AMBER_COLORS = {
-            {0.99f, 0.58f, 0.71f},
             {1.0f, 0.47f, 0.65f},
-            {1.0f, 0.35f, 0.58f},
-            {1.0f, 0.15f, 0.51f},
             {0.94f, 0.0f, 0.45f},
             {0.49f, 0.20f, 1.0f},
             {1.0f, 0.1f, 0.0f},
-            {0.98f, 0.61f, 0.007f}
+            //{0.98f, 0.61f, 0.007f},
+            {1.0f, 0.922f, 0.0f},
+            {0.0f, 0.827f, 1.0f},
+            {1.0f, 1.0f, 1.0f}
     };
 }
